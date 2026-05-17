@@ -63,4 +63,26 @@ describe("createOpenAICompatibleImagesAdapter", () => {
     const calls = fetchMock.mock.calls as unknown[][];
     expect(calls[0]?.[0]).toBe("https://provider.example.test/v1/images/edits");
   });
+
+  it("参考图生图没有 data[1] 时回退取 data[0] 的 b64_json", async () => {
+    const fetchMock = vi.fn(async () => new Response(
+      JSON.stringify({
+        data: [{ b64_json: "fallback-edited-image" }]
+      }),
+      { status: 200, headers: { "content-type": "application/json" } }
+    ));
+    const adapter = createOpenAICompatibleImagesAdapter({ fetch: fetchMock });
+
+    const result = await adapter.editImage(provider, {
+      model: "gpt-image-2",
+      prompt: "保持主体，改成午后光线",
+      image: new Blob(["fake-image"], { type: "image/png" }),
+      imageFilename: "reference.png",
+      size: "1024x1536",
+      quality: "high",
+      outputFormat: "png"
+    });
+
+    expect(result.b64Json).toBe("fallback-edited-image");
+  });
 });
