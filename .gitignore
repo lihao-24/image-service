@@ -10,8 +10,11 @@ dist/
 *.log
 *.tsbuildinfo
 *.sqlite
+*.sqlite-*
 *.sqlite3
+*.sqlite3-*
 *.db
+*.db-*
 
 uploads/
 generated/
