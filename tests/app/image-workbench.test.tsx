@@ -142,8 +142,7 @@ function renderWorkbench() {
 }
 
 async function expandTemplateLibrary() {
-  const button = await screen.findByRole("button", { name: "展开提示词库" });
-  fireEvent.click(button);
+  await screen.findByLabelText("搜索模板");
 }
 
 beforeEach(() => {
@@ -163,21 +162,14 @@ afterEach(() => {
 });
 
 describe("ImageWorkbench", () => {
-  it("桌面提示词库默认折叠，可展开和收起", async () => {
+  it("桌面提示词库默认完整展示，不再使用折叠 rail", async () => {
     mockFetchByRoute();
 
     renderWorkbench();
 
-    expect(await screen.findByRole("button", { name: "展开提示词库" })).toBeTruthy();
-    expect(screen.queryByLabelText("搜索模板")).toBeNull();
-
-    fireEvent.click(screen.getByRole("button", { name: "展开提示词库" }));
-    expect(await screen.findByRole("button", { name: "收起提示词库" })).toBeTruthy();
-    expect(screen.getByLabelText("搜索模板")).toBeTruthy();
-
-    fireEvent.click(screen.getByRole("button", { name: "收起提示词库" }));
-    expect(screen.getByRole("button", { name: "展开提示词库" })).toBeTruthy();
-    expect(screen.queryByLabelText("搜索模板")).toBeNull();
+    expect(await screen.findByLabelText("搜索模板")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "展开提示词库" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "收起提示词库" })).toBeNull();
   });
 
   it("顶部使用紧凑状态栏，不再渲染大 H1 生图工作台", () => {
@@ -189,20 +181,26 @@ describe("ImageWorkbench", () => {
     expect(screen.getByText("生图工作台")).toBeTruthy();
   });
 
-  it("桌面不再使用占位分区导航，移动端分区导航语义明确", () => {
+  it("桌面不再使用占位分区导航，移动端分区导航语义明确且默认编辑激活", () => {
     mockFetchByRoute();
 
     renderWorkbench();
 
     expect(screen.queryByLabelText("工作台分区")).toBeNull();
-    const mobileSwitch = screen.getByLabelText("移动端工作台分区");
+    const mobileSwitch = screen.getByRole("tablist", { name: "移动端工作台分区" });
     expect(mobileSwitch.className).toContain("mobile-only-panel-switch");
-    expect(within(mobileSwitch).getByRole("button", { name: "模板" })).toBeTruthy();
-    expect(within(mobileSwitch).getByRole("button", { name: "编辑" })).toBeTruthy();
-    expect(within(mobileSwitch).getByRole("button", { name: "预览" })).toBeTruthy();
+    expect(within(mobileSwitch).getByRole("tab", { name: "模板" }).getAttribute("aria-selected")).toBe(
+      "false"
+    );
+    expect(within(mobileSwitch).getByRole("tab", { name: "编辑" }).getAttribute("aria-selected")).toBe(
+      "true"
+    );
+    expect(within(mobileSwitch).getByRole("tab", { name: "预览" }).getAttribute("aria-selected")).toBe(
+      "false"
+    );
   });
 
-  it("预览空状态使用稳定画布并完整展示等待生成", () => {
+  it("预览空状态使用稳定画布、SVG 占位并完整展示等待生成", () => {
     mockFetchByRoute();
 
     renderWorkbench();
@@ -210,6 +208,17 @@ describe("ImageWorkbench", () => {
     const viewport = screen.getByRole("region", { name: "预览画布" });
     expect(viewport.className).toContain("preview-viewport");
     expect(within(viewport).getByText("等待生成")).toBeTruthy();
+    expect(within(viewport).getByRole("img", { name: "等待生成图标" })).toBeTruthy();
+  });
+
+  it("Prompt 字数统计位于 prompt 输入结构内", () => {
+    mockFetchByRoute();
+
+    renderWorkbench();
+
+    const promptField = screen.getByTestId("prompt-field");
+    expect(within(promptField).getByLabelText("Prompt")).toBeTruthy();
+    expect(within(promptField).getByText("0/4000 字").className).toContain("prompt-counter");
   });
 
   it("初始加载模板库并渲染来源切换、分类和模板", async () => {
@@ -221,7 +230,8 @@ describe("ImageWorkbench", () => {
     expect(await screen.findByRole("button", { name: "内置模板" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "我的模板" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "收藏" })).toBeTruthy();
-    expect(screen.getByRole("option", { name: "电商产品" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "全部分类" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "电商产品" })).toBeTruthy();
     expect(screen.getByRole("button", { name: /选择模板 电商白底质感主图/ })).toBeTruthy();
     expect(screen.getByRole("button", { name: /选择模板 知识流程信息图/ })).toBeTruthy();
   });
@@ -239,9 +249,7 @@ describe("ImageWorkbench", () => {
     expect(screen.getByRole("button", { name: /选择模板 知识流程信息图/ })).toBeTruthy();
 
     fireEvent.change(screen.getByLabelText("搜索模板"), { target: { value: "" } });
-    fireEvent.change(screen.getByLabelText("分类筛选"), {
-      target: { value: "ecommerce-product" }
-    });
+    fireEvent.click(screen.getByRole("button", { name: "电商产品" }));
 
     expect(screen.getByRole("button", { name: /选择模板 电商白底质感主图/ })).toBeTruthy();
     expect(screen.queryByRole("button", { name: /选择模板 知识流程信息图/ })).toBeNull();
@@ -401,6 +409,7 @@ describe("ImageWorkbench", () => {
 
     const preview = await screen.findByAltText("当前生成图片预览");
     expect(preview.getAttribute("src")).toBe(`data:image/png;base64,${tinyPng}`);
+    expect(screen.getByRole("tab", { name: "预览" }).getAttribute("aria-selected")).toBe("true");
     expect(screen.getByText("生成成功，图片仅保留在当前浏览器页面。")).toBeTruthy();
     expect(fetchMock).toHaveBeenCalledWith(
       "/api/images/generations",

@@ -148,7 +148,6 @@ export default function ImageWorkbench({ config, userLabel }: ImageWorkbenchProp
   const [libraryMessage, setLibraryMessage] = useState("");
   const [sourceView, setSourceView] = useState<TemplateSourceView>("builtin");
   const [mobilePanel, setMobilePanel] = useState<MobilePanel>("editor");
-  const [isTemplatePanelOpen, setIsTemplatePanelOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [selectedTemplateId, setSelectedTemplateId] = useState("");
@@ -160,7 +159,6 @@ export default function ImageWorkbench({ config, userLabel }: ImageWorkbenchProp
   const canGenerate = status !== "loading" && prompt.trim().length > 0;
   const canSave = saveStatus !== "saving" && prompt.trim().length > 0;
   const providerId = provider?.id ?? config.defaultProvider;
-  const shouldShowTemplateBody = isTemplatePanelOpen || mobilePanel === "templates";
 
   const allTemplates = useMemo(
     () => [...(library?.templates.builtin ?? []), ...(library?.templates.mine ?? [])],
@@ -481,15 +479,6 @@ export default function ImageWorkbench({ config, userLabel }: ImageWorkbenchProp
     setMessage("");
   }
 
-  function toggleTemplatePanel() {
-    if (mobilePanel === "templates" && !isTemplatePanelOpen) {
-      setMobilePanel("editor");
-      return;
-    }
-
-    setIsTemplatePanelOpen((current) => !current);
-  }
-
   return (
     <main className="workbench-shell">
       <header className="workbench-header">
@@ -513,17 +502,24 @@ export default function ImageWorkbench({ config, userLabel }: ImageWorkbenchProp
         </div>
       </header>
 
-      <nav className="mobile-only-panel-switch" aria-label="移动端工作台分区">
+      <nav
+        aria-label="移动端工作台分区"
+        className="mobile-only-panel-switch"
+        role="tablist"
+      >
         {[
           ["templates", "模板"],
           ["editor", "编辑"],
           ["preview", "预览"]
         ].map(([panel, label]) => (
           <button
-            aria-pressed={mobilePanel === panel}
+            aria-controls={`${panel}-panel`}
+            aria-selected={mobilePanel === panel}
             className={mobilePanel === panel ? "is-active" : ""}
+            id={`${panel}-tab`}
             key={panel}
             onClick={() => setMobilePanel(panel as MobilePanel)}
+            role="tab"
             type="button"
           >
             {label}
@@ -534,134 +530,119 @@ export default function ImageWorkbench({ config, userLabel }: ImageWorkbenchProp
       <div className="workbench-layout">
         <section
           aria-label="提示词库"
-          className={[
-            "template-panel",
-            shouldShowTemplateBody ? "is-expanded" : "is-collapsed",
-            mobilePanel === "templates" ? "is-mobile-active" : ""
-          ]
-            .filter(Boolean)
-            .join(" ")}
+          aria-labelledby="templates-tab"
+          className={mobilePanel === "templates" ? "template-panel is-mobile-active" : "template-panel"}
+          id="templates-panel"
         >
           <div className="template-panel-top">
-            <button
-              aria-expanded={shouldShowTemplateBody}
-              aria-label={shouldShowTemplateBody ? "收起提示词库" : "展开提示词库"}
-              className="template-toggle-button"
-              onClick={toggleTemplatePanel}
-              type="button"
-            >
-              <span aria-hidden="true">{shouldShowTemplateBody ? "‹" : "›"}</span>
-              <span>{shouldShowTemplateBody ? "收起" : "模板"}</span>
-            </button>
-            {shouldShowTemplateBody ? (
-              <SectionHeader title="提示词库" meta={`${visibleTemplates.length} 个模板`} />
-            ) : (
-              <div className="template-rail-summary">
-                <strong>{visibleTemplates.length}</strong>
-                <span>模板</span>
-              </div>
-            )}
+            <SectionHeader title="提示词库" meta={`${visibleTemplates.length} 个模板`} />
           </div>
 
-          {shouldShowTemplateBody ? (
-            <div className="template-panel-body">
-              <div className="source-switch" role="group" aria-label="模板来源">
-                {[
-                  ["builtin", "内置模板"],
-                  ["mine", "我的模板"],
-                  ["favorites", "收藏"]
-                ].map(([source, label]) => (
+          <div className="template-panel-body">
+            <div className="source-switch" role="group" aria-label="模板来源">
+              {[
+                ["builtin", "内置模板"],
+                ["mine", "我的模板"],
+                ["favorites", "收藏"]
+              ].map(([source, label]) => (
+                <button
+                  aria-pressed={sourceView === source}
+                  className={sourceView === source ? "is-active" : ""}
+                  key={source}
+                  onClick={() => setSourceView(source as TemplateSourceView)}
+                  type="button"
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+
+            <label className="field compact-field search-field">
+              <span>搜索模板</span>
+              <input
+                onChange={(event) => setSearchQuery(event.target.value)}
+                placeholder="搜索标题、标签或 prompt"
+                value={searchQuery}
+              />
+            </label>
+
+            <div className="category-filter" aria-label="分类筛选" role="group">
+              <button
+                aria-pressed={categoryFilter === "all"}
+                className={categoryFilter === "all" ? "is-active" : ""}
+                disabled={sourceView === "mine"}
+                onClick={() => setCategoryFilter("all")}
+                type="button"
+              >
+                全部分类
+              </button>
+              {library?.categories.map((category) => (
+                <button
+                  aria-pressed={categoryFilter === category.id}
+                  className={categoryFilter === category.id ? "is-active" : ""}
+                  disabled={sourceView === "mine"}
+                  key={category.id}
+                  onClick={() => setCategoryFilter(category.id)}
+                  type="button"
+                >
+                  {category.name}
+                </button>
+              ))}
+            </div>
+
+            {libraryStatus === "loading" ? <p className="empty-state">提示词库加载中...</p> : null}
+            {libraryStatus === "error" ? (
+              <p className="status-message error">{libraryMessage}</p>
+            ) : null}
+            {libraryStatus === "success" && visibleTemplates.length === 0 ? (
+              <p className="empty-state">暂无匹配模板，请调整搜索或筛选。</p>
+            ) : null}
+
+            <ul className="template-list" aria-label="模板列表">
+              {visibleTemplates.map((template) => (
+                <li className="template-item" key={template.id}>
                   <button
-                    aria-pressed={sourceView === source}
-                    className={sourceView === source ? "is-active" : ""}
-                    key={source}
-                    onClick={() => setSourceView(source as TemplateSourceView)}
+                    aria-label={`选择模板 ${template.title}`}
+                    className={
+                      selectedTemplateId === template.id
+                        ? "template-select is-selected"
+                        : "template-select"
+                    }
+                    onClick={() => selectTemplate(template)}
                     type="button"
                   >
-                    {label}
+                    <span className="template-title">{template.title}</span>
+                    <span className="template-meta">
+                      {template.category_name} ·{" "}
+                      {template.mode === "image-edit" ? "参考图" : "文生图"}
+                    </span>
+                    <span className="template-tags">{template.tags.slice(0, 3).join(" / ")}</span>
                   </button>
-                ))}
-              </div>
-
-              <label className="field compact-field">
-                <span>搜索模板</span>
-                <input
-                  onChange={(event) => setSearchQuery(event.target.value)}
-                  placeholder="搜索标题、标签或 prompt"
-                  value={searchQuery}
-                />
-              </label>
-
-              <label className="field compact-field">
-                <span>分类筛选</span>
-                <select
-                  disabled={sourceView === "mine"}
-                  onChange={(event) => setCategoryFilter(event.target.value)}
-                  value={categoryFilter}
-                >
-                  <option value="all">全部分类</option>
-                  {library?.categories.map((category) => (
-                    <option key={category.id} value={category.id}>
-                      {category.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              {libraryStatus === "loading" ? (
-                <p className="empty-state">提示词库加载中...</p>
-              ) : null}
-              {libraryStatus === "error" ? (
-                <p className="status-message error">{libraryMessage}</p>
-              ) : null}
-              {libraryStatus === "success" && visibleTemplates.length === 0 ? (
-                <p className="empty-state">暂无匹配模板，请调整搜索或筛选。</p>
-              ) : null}
-
-              <ul className="template-list" aria-label="模板列表">
-                {visibleTemplates.map((template) => (
-                  <li className="template-item" key={template.id}>
+                  {template.source === "builtin" ? (
                     <button
-                      aria-label={`选择模板 ${template.title}`}
+                      aria-label={`${template.is_favorite ? "取消收藏" : "收藏"} ${template.title}`}
                       className={
-                        selectedTemplateId === template.id
-                          ? "template-select is-selected"
-                          : "template-select"
+                        template.is_favorite ? "favorite-button is-favorite" : "favorite-button"
                       }
-                      onClick={() => selectTemplate(template)}
+                      onClick={() => void toggleBuiltinFavorite(template)}
                       type="button"
                     >
-                      <span className="template-title">{template.title}</span>
-                      <span className="template-meta">
-                        {template.category_name} ·{" "}
-                        {template.mode === "image-edit" ? "参考图" : "文生图"}
-                      </span>
-                      <span className="template-tags">{template.tags.slice(0, 3).join(" / ")}</span>
+                      {template.is_favorite ? "已收藏" : "收藏"}
                     </button>
-                    {template.source === "builtin" ? (
-                      <button
-                        aria-label={`${template.is_favorite ? "取消收藏" : "收藏"} ${template.title}`}
-                        className={
-                          template.is_favorite ? "favorite-button is-favorite" : "favorite-button"
-                        }
-                        onClick={() => void toggleBuiltinFavorite(template)}
-                        type="button"
-                      >
-                        {template.is_favorite ? "已收藏" : "收藏"}
-                      </button>
-                    ) : (
-                      <span className="mine-badge">{template.is_favorite ? "收藏" : "我的"}</span>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ) : null}
+                  ) : (
+                    <span className="mine-badge">{template.is_favorite ? "收藏" : "我的"}</span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </div>
         </section>
 
         <section
           aria-label="Prompt 编辑和参数"
+          aria-labelledby="editor-tab"
           className={mobilePanel === "editor" ? "control-panel is-mobile-active" : "control-panel"}
+          id="editor-panel"
         >
           <SectionHeader
             title="编辑"
@@ -689,7 +670,7 @@ export default function ImageWorkbench({ config, userLabel }: ImageWorkbenchProp
             </label>
           </div>
 
-          <label className="field prompt-field">
+          <label className="field prompt-field" data-testid="prompt-field">
             <span>Prompt</span>
             <textarea
               aria-label="Prompt"
@@ -698,7 +679,7 @@ export default function ImageWorkbench({ config, userLabel }: ImageWorkbenchProp
               rows={9}
               value={prompt}
             />
-            <span className="field-hint">{prompt.length}/4000 字</span>
+            <span className="field-hint prompt-counter">{prompt.length}/4000 字</span>
           </label>
 
           <div className="template-detail" aria-label="模板变量">
@@ -877,7 +858,9 @@ export default function ImageWorkbench({ config, userLabel }: ImageWorkbenchProp
 
         <section
           aria-label="临时预览"
+          aria-labelledby="preview-tab"
           className={mobilePanel === "preview" ? "preview-panel is-mobile-active" : "preview-panel"}
+          id="preview-panel"
         >
           <SectionHeader title="预览" meta={usageText || "今日用量将在生成后显示"} />
           <div className="preview-viewport" role="region" aria-label="预览画布">
@@ -886,6 +869,33 @@ export default function ImageWorkbench({ config, userLabel }: ImageWorkbenchProp
               <img alt="当前生成图片预览" className="preview-image" src={image.src} />
             ) : (
               <div className="empty-preview">
+                <svg
+                  aria-label="等待生成图标"
+                  fill="none"
+                  height="44"
+                  role="img"
+                  viewBox="0 0 44 44"
+                  width="44"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <rect
+                    height="30"
+                    rx="8"
+                    stroke="currentColor"
+                    strokeWidth="1.6"
+                    width="30"
+                    x="7"
+                    y="7"
+                  />
+                  <path
+                    d="M14 28l5.5-6 4.4 4.2 2.8-3.1L31 28"
+                    stroke="currentColor"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth="1.6"
+                  />
+                  <circle cx="27.5" cy="16.5" r="2.4" fill="currentColor" />
+                </svg>
                 <span>等待生成</span>
               </div>
             )}
