@@ -50,7 +50,8 @@
 | 工作窗口提示词 | 已完成 | fa3ea83 | 用户确认后续提示词直接由主控窗口发出，不再创建提示词文档；W02 已拆分 W03-W12；后续窗口必须要求提交。 |
 | Next.js 实现 | 已完成 | 04094c7 | W03-W12 已完成；基础验证与阶段收口 review 通过，无阻塞。 |
 | 提示词库与 UI 重构设计 | 已完成 | 30659ba | W13 完成；新增三栏工作台、内置中文模板库、我的模板/收藏、变量填充和 W14-W17 实施边界设计。 |
-| 提示词库与 UI 重构实施计划 | 已完成 | 待提交 | 主控新增 W14-W17 自动调度计划，下一步派发 W14 内置中文模板数据提取与结构化。 |
+| 提示词库与 UI 重构实施计划 | 已完成 | 4178a4f | 主控新增 W14-W17 自动调度计划。 |
+| W14 内置中文模板数据 | 已完成 | 483260a | 新增 12 类/13 条内置中文模板、模板类型和变量渲染/插入 helper；完整验证通过。 |
 
 ## 阶段结论
 
@@ -80,4 +81,5 @@ W12 收口验证通过。下一阶段建议进入部署准备；部署前补齐�
 - 2026-05-17：W12 基础验证与阶段收口 review 完成，提交 `04094c7 docs: add w12 phase closeout review`。新增 `docs/reports/2026-05-17-w12-phase-closeout-review.md`；验证 `pnpm lint`、`pnpm typecheck`、`pnpm test`（13 个 test files、59 个 tests）、`pnpm build`、`git diff --check` 全部通过；验收清单覆盖未登录保护、文生图 data[0]、参考图 data[1]/fallback、图片不保存、配置只手动保存、generation log 不保存 prompt 全文、allowlist、每日额度和用户隔离；仓库扫描未发现真实 `.env`、SQLite/db 文件、上传/生成图片、密钥或长 base64；无阻塞。
 - 2026-05-17：用户本地配置 Supabase 和 sub2api 后完成真实登录与真实生图测试，反馈功能跑通但 UI/交互较差，希望新增提示词库，避免每次从零编写 prompt。新阶段要求内置模板库、我的模板/个人收藏、中文分类、参考 `freestylefly/awesome-gpt-image-2` 提取适合 `gpt-image-2` 的提示词，并使用 `ui-ux-pro-max` 做 UI 设计。
 - 2026-05-17：W13 提示词库与生图工作台 UI 重构设计完成，提交 `30659ba docs: design prompt library workbench redesign`。新增 `docs/specs/2026-05-17-prompt-library-ui-redesign.md`；设计三栏工具型工作台、12 个中文模板分类、内置模板数据结构、变量替换/插入逻辑、`prompt_recipes` 与 `template_favorites` 关系、模板聚合 API、移动端降级、安全隐私边界和 W14-W17 后续拆分；验证 `git diff --check` 通过，未跑完整测试因为只新增 Markdown 设计文档；无阻塞。
-- 2026-05-17：主控新增 `docs/plans/2026-05-17-prompt-library-ui-redesign-implementation-plan.md`，拆分 W14-W17：内置中文模板数据提取与结构化、提示词库 API / 我的模板聚合、工作台 UI 重构、UI/UX 验证与阶段收口。计划要求实现类窗口 TDD、每窗提交、忽略本地 `next-env.d.ts` 改动、不提交敏感/运行时数据。
+- 2026-05-17：主控新增 `docs/plans/2026-05-17-prompt-library-ui-redesign-implementation-plan.md`，提交 `4178a4f docs: plan prompt library ui implementation`。计划拆分 W14-W17：内置中文模板数据提取与结构化、提示词库 API / 我的模板聚合、工作台 UI 重构、UI/UX 验证与阶段收口；要求实现类窗口 TDD、每窗提交、忽略本地 `next-env.d.ts` 改动、不提交敏感/运行时数据。
+- 2026-05-17：W14 内置中文模板数据提取与结构化完成，提交 `483260a feat: add builtin prompt templates`。新增 `src/lib/prompt-templates/*` 和 `tests/prompt-templates/*`；共 13 条内置中文模板，覆盖 12 个分类，包含文生图和参考图模板，推荐参数限定在 MVP allowlist；新增 `renderPromptTemplate` 与 `insertRenderedPrompt` 纯函数，覆盖必填变量、默认值、未知变量、未声明占位符、插入选区和 4000 字符上限；读取 GitHub README、`docs/templates.md` 和 LICENSE，模板内容中文化改写；验证 `pnpm test tests/prompt-templates`、`pnpm lint`、`pnpm typecheck`、`pnpm test`（15 files / 74 tests）、`git diff --check` 全部通过；无阻塞。
