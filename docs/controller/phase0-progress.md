@@ -52,6 +52,7 @@
 | 提示词库与 UI 重构设计 | 已完成 | 30659ba | W13 完成；新增三栏工作台、内置中文模板库、我的模板/收藏、变量填充和 W14-W17 实施边界设计。 |
 | 提示词库与 UI 重构实施计划 | 已完成 | 4178a4f | 主控新增 W14-W17 自动调度计划。 |
 | W14 内置中文模板数据 | 已完成 | 483260a | 新增 12 类/13 条内置中文模板、模板类型和变量渲染/插入 helper；完整验证通过。 |
+| W15 提示词库 API / 我的模板聚合 | 已完成 | 90ce30a | 新增模板聚合 API、内置模板收藏 API、`template_favorites` 数据层和用户隔离测试。 |
 
 ## 阶段结论
 
@@ -83,3 +84,4 @@ W12 收口验证通过。下一阶段建议进入部署准备；部署前补齐�
 - 2026-05-17：W13 提示词库与生图工作台 UI 重构设计完成，提交 `30659ba docs: design prompt library workbench redesign`。新增 `docs/specs/2026-05-17-prompt-library-ui-redesign.md`；设计三栏工具型工作台、12 个中文模板分类、内置模板数据结构、变量替换/插入逻辑、`prompt_recipes` 与 `template_favorites` 关系、模板聚合 API、移动端降级、安全隐私边界和 W14-W17 后续拆分；验证 `git diff --check` 通过，未跑完整测试因为只新增 Markdown 设计文档；无阻塞。
 - 2026-05-17：主控新增 `docs/plans/2026-05-17-prompt-library-ui-redesign-implementation-plan.md`，提交 `4178a4f docs: plan prompt library ui implementation`。计划拆分 W14-W17：内置中文模板数据提取与结构化、提示词库 API / 我的模板聚合、工作台 UI 重构、UI/UX 验证与阶段收口；要求实现类窗口 TDD、每窗提交、忽略本地 `next-env.d.ts` 改动、不提交敏感/运行时数据。
 - 2026-05-17：W14 内置中文模板数据提取与结构化完成，提交 `483260a feat: add builtin prompt templates`。新增 `src/lib/prompt-templates/*` 和 `tests/prompt-templates/*`；共 13 条内置中文模板，覆盖 12 个分类，包含文生图和参考图模板，推荐参数限定在 MVP allowlist；新增 `renderPromptTemplate` 与 `insertRenderedPrompt` 纯函数，覆盖必填变量、默认值、未知变量、未声明占位符、插入选区和 4000 字符上限；读取 GitHub README、`docs/templates.md` 和 LICENSE，模板内容中文化改写；验证 `pnpm test tests/prompt-templates`、`pnpm lint`、`pnpm typecheck`、`pnpm test`（15 files / 74 tests）、`git diff --check` 全部通过；无阻塞。
+- 2026-05-17：W15 提示词库 API / 我的模板聚合完成，提交 `90ce30a feat: add prompt template library api`。新增 `GET /api/prompt-templates`、`POST /api/prompt-templates/favorites`、`DELETE /api/prompt-templates/favorites/[templateId]`、`src/lib/prompt-template-library/index.ts`，并在 SQLite 新增 `template_favorites(user_id, template_id, created_at)`；聚合响应包含 categories、内置模板、我的模板和收藏 ids，支持 source/category/mode/q/favorite 筛选；收藏只保存当前用户的内置模板 id，不复制为 `prompt_recipes`；测试覆盖未登录保护、用户隔离、非法模板拒绝、收藏幂等、响应不泄露 baseUrl/apiKeyEnv/API key；验证 `pnpm test tests/api/prompt-template-library-route.test.ts tests/db/sqlite-data-layer.test.ts`（2 files / 20 tests）、`pnpm lint`、`pnpm typecheck`、`pnpm test`（16 files / 89 tests）、`git diff --check` 全部通过；主控复跑目标测试与 `git diff --check` 通过；无阻塞。
