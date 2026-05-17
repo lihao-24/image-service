@@ -1,11 +1,26 @@
 "use client";
 
-import { useMemo, useRef, useState, type ChangeEvent } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type ReactNode
+} from "react";
 import type { PublicImageConfig } from "@/lib/config";
+import {
+  insertRenderedPrompt,
+  renderPromptTemplate,
+  type BuiltinPromptTemplate,
+  type PromptTemplateVariable
+} from "@/lib/prompt-templates";
 
 type GenerationMode = "text-to-image" | "image-edit";
 type RequestStatus = "idle" | "loading" | "success" | "error";
 type SaveStatus = "idle" | "saving" | "saved" | "error";
+type TemplateSourceView = "builtin" | "mine" | "favorites";
+type MobilePanel = "templates" | "editor" | "preview";
 
 type TemporaryImage = {
   src: string;
@@ -29,6 +44,70 @@ type GenerateResponse = {
 };
 
 type DailyUsage = NonNullable<NonNullable<GenerateResponse["meta"]>["daily_usage"]>;
+
+type TemplateCategory = {
+  id: string;
+  name: string;
+  description?: string;
+};
+
+type ApiRecommendedParams = {
+  model: string;
+  size: string;
+  quality: string;
+  output_format: string;
+  reference_mode?: string | null;
+};
+
+type BuiltinTemplateRecord = {
+  source: "builtin";
+  id: string;
+  title: string;
+  category: string;
+  category_name: string;
+  tags: string[];
+  mode: GenerationMode;
+  recommended: ApiRecommendedParams;
+  prompt: string;
+  variables: PromptTemplateVariable[];
+  source_metadata?: {
+    type: string;
+    name: string;
+    referenceUrl?: string;
+    note: string;
+  };
+  safety_notes?: string[];
+  is_favorite: boolean;
+};
+
+type MineTemplateRecord = {
+  source: "mine";
+  id: string;
+  title: string;
+  category: null;
+  category_name: "我的模板";
+  tags: string[];
+  mode: GenerationMode;
+  provider?: string;
+  model: string;
+  size: string;
+  quality: string;
+  output_format: string;
+  prompt: string;
+  reference_mode: string | null;
+  is_favorite: boolean;
+};
+
+type TemplateRecord = BuiltinTemplateRecord | MineTemplateRecord;
+
+type TemplateLibrary = {
+  categories: TemplateCategory[];
+  templates: {
+    builtin: BuiltinTemplateRecord[];
+    mine: MineTemplateRecord[];
+  };
+  favorite_template_ids: string[];
+};
 
 type ImageWorkbenchProps = {
   config: PublicImageConfig;
@@ -64,11 +143,194 @@ export default function ImageWorkbench({ config, userLabel }: ImageWorkbenchProp
   const [message, setMessage] = useState("");
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
   const [saveMessage, setSaveMessage] = useState("");
+  const [library, setLibrary] = useState<TemplateLibrary | null>(null);
+  const [libraryStatus, setLibraryStatus] = useState<RequestStatus>("loading");
+  const [libraryMessage, setLibraryMessage] = useState("");
+  const [sourceView, setSourceView] = useState<TemplateSourceView>("builtin");
+  const [mobilePanel, setMobilePanel] = useState<MobilePanel>("templates");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState("all");
+  const [selectedTemplateId, setSelectedTemplateId] = useState("");
+  const [variableValues, setVariableValues] = useState<Record<string, string>>({});
+  const [templateError, setTemplateError] = useState("");
+  const [templateSuccess, setTemplateSuccess] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const canGenerate = status !== "loading" && prompt.trim().length > 0;
   const canSave = saveStatus !== "saving" && prompt.trim().length > 0;
   const providerId = provider?.id ?? config.defaultProvider;
+
+  const allTemplates = useMemo(
+    () => [...(library?.templates.builtin ?? []), ...(library?.templates.mine ?? [])],
+    [library]
+  );
+
+  const selectedTemplate = useMemo(
+    () => allTemplates.find((template) => template.id === selectedTemplateId) ?? null,
+    [allTemplates, selectedTemplateId]
+  );
+
+  const visibleTemplates = useMemo(() => {
+    return allTemplates.filter((template) => {
+      if (sourceView === "builtin" && template.source !== "builtin") {
+        return false;
+      }
+      if (sourceView === "mine" && template.source !== "mine") {
+        return false;
+      }
+      if (sourceView === "favorites" && !template.is_favorite) {
+        return false;
+      }
+      if (
+        categoryFilter !== "all" &&
+        (template.source !== "builtin" || template.category !== categoryFilter)
+      ) {
+        return false;
+      }
+      return matchesTemplateQuery(template, searchQuery);
+    });
+  }, [allTemplates, categoryFilter, searchQuery, sourceView]);
+
+  useEffect(() => {
+    void loadTemplateLibrary();
+  }, []);
+
+  async function loadTemplateLibrary() {
+    setLibraryStatus("loading");
+    setLibraryMessage("");
+
+    try {
+      const response = await fetch("/api/prompt-templates");
+      const payload = (await response.json().catch(() => ({}))) as TemplateLibrary & {
+        message?: string;
+      };
+
+      if (!response.ok) {
+        throw new Error(payload.message || "提示词库加载失败，请稍后再试。");
+      }
+
+      setLibrary(payload);
+      setLibraryStatus("success");
+      setLibraryMessage("");
+    } catch (error) {
+      setLibraryStatus("error");
+      setLibraryMessage(error instanceof Error ? error.message : "提示词库加载失败，请稍后再试。");
+    }
+  }
+
+  function selectTemplate(template: TemplateRecord) {
+    setSelectedTemplateId(template.id);
+    setTemplateError("");
+    setTemplateSuccess("");
+    setVariableValues(readInitialVariableValues(template));
+    if (template.source === "mine") {
+      setTitle(template.title);
+    }
+    setMobilePanel("editor");
+  }
+
+  async function toggleBuiltinFavorite(template: BuiltinTemplateRecord) {
+    setTemplateError("");
+    setTemplateSuccess("");
+    const nextFavorite = !template.is_favorite;
+
+    try {
+      const response = await fetch(
+        nextFavorite
+          ? "/api/prompt-templates/favorites"
+          : `/api/prompt-templates/favorites/${encodeURIComponent(template.id)}`,
+        {
+          method: nextFavorite ? "POST" : "DELETE",
+          headers: nextFavorite ? { "Content-Type": "application/json" } : undefined,
+          body: nextFavorite ? JSON.stringify({ template_id: template.id }) : undefined
+        }
+      );
+      const payload = (await response.json().catch(() => ({}))) as { message?: string };
+
+      if (!response.ok) {
+        throw new Error(payload.message || "收藏更新失败，请稍后再试。");
+      }
+
+      setLibrary((current) => updateBuiltinFavorite(current, template.id, nextFavorite));
+      setTemplateSuccess(nextFavorite ? "已加入收藏。" : "已取消收藏。");
+    } catch (error) {
+      setTemplateError(error instanceof Error ? error.message : "收藏更新失败，请稍后再试。");
+    }
+  }
+
+  function applyTemplate(action: "replace" | "insert") {
+    if (!selectedTemplate) {
+      setTemplateError("请先选择一个模板。");
+      return;
+    }
+
+    const rendered =
+      selectedTemplate.source === "builtin"
+        ? renderSelectedBuiltinTemplate(selectedTemplate, variableValues)
+        : { ok: true as const, prompt: selectedTemplate.prompt };
+
+    if (!rendered.ok) {
+      setTemplateError(rendered.message);
+      setTemplateSuccess("");
+      return;
+    }
+
+    const nextPromptResult =
+      action === "replace"
+        ? { ok: true as const, prompt: rendered.prompt }
+        : insertRenderedPrompt(prompt, rendered.prompt);
+
+    if (!nextPromptResult.ok) {
+      setTemplateError(nextPromptResult.message);
+      setTemplateSuccess("");
+      return;
+    }
+
+    setPrompt(nextPromptResult.prompt);
+    applyTemplateParams(selectedTemplate);
+    setTemplateError("");
+    setTemplateSuccess(`已套用：${selectedTemplate.title}`);
+  }
+
+  function applyTemplateParams(template: TemplateRecord) {
+    setMode(template.mode);
+    if (template.source === "builtin") {
+      setModelIfAllowed(template.recommended.model);
+      setSizeIfAllowed(template.recommended.size);
+      setQualityIfAllowed(template.recommended.quality);
+      setOutputFormatIfAllowed(template.recommended.output_format);
+      return;
+    }
+
+    setModelIfAllowed(template.model);
+    setSizeIfAllowed(template.size);
+    setQualityIfAllowed(template.quality);
+    setOutputFormatIfAllowed(template.output_format);
+  }
+
+  function setModelIfAllowed(nextModel: string) {
+    if (provider?.models.includes(nextModel)) {
+      setModel(nextModel);
+    }
+  }
+
+  function setSizeIfAllowed(nextSize: string) {
+    if (config.options.sizes.includes(nextSize)) {
+      setSize(nextSize);
+    }
+  }
+
+  function setQualityIfAllowed(nextQuality: string) {
+    if (config.options.qualities.includes(nextQuality)) {
+      setQuality(nextQuality);
+    }
+  }
+
+  function setOutputFormatIfAllowed(nextFormat: string) {
+    if (config.options.outputFormats.includes(nextFormat)) {
+      setOutputFormat(nextFormat);
+    }
+  }
 
   async function handleGenerate() {
     if (!prompt.trim()) {
@@ -115,6 +377,7 @@ export default function ImageWorkbench({ config, userLabel }: ImageWorkbenchProp
       setStatus("success");
       setMessage("生成成功，图片仅保留在当前浏览器页面。");
       setUsageText(formatUsage(payload.meta?.daily_usage));
+      setMobilePanel("preview");
     } catch (error) {
       setStatus("error");
       setMessage(error instanceof Error ? error.message : SAFE_PROVIDER_ERROR_MESSAGE);
@@ -187,6 +450,7 @@ export default function ImageWorkbench({ config, userLabel }: ImageWorkbenchProp
 
       setSaveStatus("saved");
       setSaveMessage("配置已保存。");
+      await loadTemplateLibrary();
     } catch (error) {
       setSaveStatus("error");
       setSaveMessage(error instanceof Error ? error.message : "配置保存失败，请稍后再试。");
@@ -232,8 +496,131 @@ export default function ImageWorkbench({ config, userLabel }: ImageWorkbenchProp
         </div>
       </header>
 
+      <nav className="mobile-panel-switch" aria-label="工作台分区">
+        {[
+          ["templates", "模板"],
+          ["editor", "编辑"],
+          ["preview", "预览"]
+        ].map(([panel, label]) => (
+          <button
+            aria-pressed={mobilePanel === panel}
+            className={mobilePanel === panel ? "is-active" : ""}
+            key={panel}
+            onClick={() => setMobilePanel(panel as MobilePanel)}
+            type="button"
+          >
+            {label}
+          </button>
+        ))}
+      </nav>
+
       <div className="workbench-layout">
-        <section className="control-panel" aria-label="生图参数">
+        <section
+          aria-label="提示词库"
+          className={mobilePanel === "templates" ? "template-panel is-mobile-active" : "template-panel"}
+        >
+          <SectionHeader title="提示词库" meta={`${visibleTemplates.length} 个模板`} />
+
+          <div className="source-switch" role="group" aria-label="模板来源">
+            {[
+              ["builtin", "内置模板"],
+              ["mine", "我的模板"],
+              ["favorites", "收藏"]
+            ].map(([source, label]) => (
+              <button
+                aria-pressed={sourceView === source}
+                className={sourceView === source ? "is-active" : ""}
+                key={source}
+                onClick={() => setSourceView(source as TemplateSourceView)}
+                type="button"
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+
+          <label className="field compact-field">
+            <span>搜索模板</span>
+            <input
+              onChange={(event) => setSearchQuery(event.target.value)}
+              placeholder="搜索标题、标签或 prompt"
+              value={searchQuery}
+            />
+          </label>
+
+          <label className="field compact-field">
+            <span>分类筛选</span>
+            <select
+              disabled={sourceView === "mine"}
+              onChange={(event) => setCategoryFilter(event.target.value)}
+              value={categoryFilter}
+            >
+              <option value="all">全部分类</option>
+              {library?.categories.map((category) => (
+                <option key={category.id} value={category.id}>
+                  {category.name}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          {libraryStatus === "loading" ? (
+            <p className="empty-state">提示词库加载中...</p>
+          ) : null}
+          {libraryStatus === "error" ? (
+            <p className="status-message error">{libraryMessage}</p>
+          ) : null}
+          {libraryStatus === "success" && visibleTemplates.length === 0 ? (
+            <p className="empty-state">暂无匹配模板，请调整搜索或筛选。</p>
+          ) : null}
+
+          <ul className="template-list" aria-label="模板列表">
+            {visibleTemplates.map((template) => (
+              <li className="template-item" key={template.id}>
+                <button
+                  aria-label={`选择模板 ${template.title}`}
+                  className={
+                    selectedTemplateId === template.id
+                      ? "template-select is-selected"
+                      : "template-select"
+                  }
+                  onClick={() => selectTemplate(template)}
+                  type="button"
+                >
+                  <span className="template-title">{template.title}</span>
+                  <span className="template-meta">
+                    {template.category_name} · {template.mode === "image-edit" ? "参考图" : "文生图"}
+                  </span>
+                  <span className="template-tags">{template.tags.slice(0, 3).join(" / ")}</span>
+                </button>
+                {template.source === "builtin" ? (
+                  <button
+                    aria-label={`${template.is_favorite ? "取消收藏" : "收藏"} ${template.title}`}
+                    className={
+                      template.is_favorite ? "favorite-button is-favorite" : "favorite-button"
+                    }
+                    onClick={() => void toggleBuiltinFavorite(template)}
+                    type="button"
+                  >
+                    {template.is_favorite ? "已收藏" : "收藏"}
+                  </button>
+                ) : (
+                  <span className="mine-badge">{template.is_favorite ? "收藏" : "我的"}</span>
+                )}
+              </li>
+            ))}
+          </ul>
+        </section>
+
+        <section
+          aria-label="Prompt 编辑和参数"
+          className={mobilePanel === "editor" ? "control-panel is-mobile-active" : "control-panel"}
+        >
+          <SectionHeader
+            title="编辑"
+            meta={selectedTemplate ? `已选择：${selectedTemplate.title}` : "未选择模板"}
+          />
+
           <div className="mode-switch" role="radiogroup" aria-label="生成模式">
             <label>
               <input
@@ -255,20 +642,86 @@ export default function ImageWorkbench({ config, userLabel }: ImageWorkbenchProp
             </label>
           </div>
 
-          <label className="field">
+          <label className="field prompt-field">
             <span>Prompt</span>
             <textarea
+              aria-label="Prompt"
               maxLength={4000}
               onChange={(event) => setPrompt(event.target.value)}
-              rows={8}
+              rows={9}
               value={prompt}
             />
+            <span className="field-hint">{prompt.length}/4000 字</span>
           </label>
+
+          <div className="template-detail" aria-label="模板变量">
+            <div className="template-detail-head">
+              <h2>模板变量</h2>
+              <span>{selectedTemplate ? selectedTemplate.title : "先从左侧选择模板"}</span>
+            </div>
+            {selectedTemplate ? (
+              <>
+                <p className="template-prompt-preview">{selectedTemplate.prompt}</p>
+                {selectedTemplate.source === "builtin" && selectedTemplate.variables.length > 0 ? (
+                  <div className="variable-grid">
+                    {selectedTemplate.variables.map((variable) => (
+                      <label className="field compact-field" key={variable.key}>
+                        <span>
+                          {variable.label}
+                          {variable.required ? " *" : ""}
+                        </span>
+                        <input
+                          aria-label={variable.label}
+                          maxLength={variable.maxLength}
+                          onChange={(event) =>
+                            setVariableValues((current) => ({
+                              ...current,
+                              [variable.key]: event.target.value
+                            }))
+                          }
+                          placeholder={variable.placeholder}
+                          value={variableValues[variable.key] ?? ""}
+                        />
+                        {variable.helperText ? (
+                          <span className="field-hint">{variable.helperText}</span>
+                        ) : null}
+                      </label>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="empty-state compact-empty">我的模板会直接套用保存时的 prompt。</p>
+                )}
+                <div className="template-actions">
+                  <button
+                    className="secondary-button"
+                    onClick={() => applyTemplate("replace")}
+                    type="button"
+                  >
+                    替换当前 prompt
+                  </button>
+                  <button
+                    className="secondary-button"
+                    onClick={() => applyTemplate("insert")}
+                    type="button"
+                  >
+                    插入到当前 prompt
+                  </button>
+                </div>
+              </>
+            ) : (
+              <p className="empty-state compact-empty">
+                点击模板只会填入 prompt 和推荐参数，不会生成图片或保存配置。
+              </p>
+            )}
+            {templateError ? <p className="status-message error">{templateError}</p> : null}
+            {templateSuccess ? <p className="status-message saved">{templateSuccess}</p> : null}
+          </div>
 
           {mode === "image-edit" ? (
             <label className="field">
               <span>参考图文件</span>
               <input
+                aria-label="参考图文件"
                 accept="image/png,image/jpeg,image/webp"
                 onChange={handleReferenceImageChange}
                 ref={fileInputRef}
@@ -276,7 +729,9 @@ export default function ImageWorkbench({ config, userLabel }: ImageWorkbenchProp
               />
               {referenceImage ? (
                 <span className="field-hint">{referenceImage.name}</span>
-              ) : null}
+              ) : (
+                <span className="field-hint">参考图只在本次请求中使用，不会持久化保存。</span>
+              )}
             </label>
           ) : null}
 
@@ -373,7 +828,11 @@ export default function ImageWorkbench({ config, userLabel }: ImageWorkbenchProp
           ) : null}
         </section>
 
-        <section className="preview-panel" aria-label="临时预览">
+        <section
+          aria-label="临时预览"
+          className={mobilePanel === "preview" ? "preview-panel is-mobile-active" : "preview-panel"}
+        >
+          <SectionHeader title="预览" meta={usageText || "今日用量将在生成后显示"} />
           <div className="preview-frame">
             {image ? (
               // eslint-disable-next-line @next/next/no-img-element
@@ -383,7 +842,7 @@ export default function ImageWorkbench({ config, userLabel }: ImageWorkbenchProp
             )}
           </div>
           <div className="preview-footer">
-            <span>{usageText || "今日用量将在生成后显示"}</span>
+            <span>图片只在当前页面临时展示，不会写入模板、日志或浏览器存储。</span>
             <a
               aria-disabled={!image}
               className={image ? "download-link" : "download-link disabled"}
@@ -402,6 +861,109 @@ export default function ImageWorkbench({ config, userLabel }: ImageWorkbenchProp
       </div>
     </main>
   );
+}
+
+function SectionHeader({ title, meta }: { title: string; meta: ReactNode }) {
+  return (
+    <div className="section-header">
+      <h2>{title}</h2>
+      <span>{meta}</span>
+    </div>
+  );
+}
+
+function renderSelectedBuiltinTemplate(
+  template: BuiltinTemplateRecord,
+  values: Record<string, string>
+) {
+  return renderPromptTemplate(
+    {
+      id: template.id,
+      title: template.title,
+      category: template.category,
+      tags: template.tags,
+      mode: template.mode,
+      recommended: {
+        model: "gpt-image-2",
+        size: template.recommended.size,
+        quality: template.recommended.quality,
+        outputFormat: template.recommended.output_format,
+        referenceMode:
+          template.recommended.reference_mode === "single-image" ? "single-image" : "none"
+      },
+      prompt: template.prompt,
+      variables: template.variables,
+      source: {
+        type: "external-inspired",
+        name: template.source_metadata?.name ?? "image-service",
+        referenceUrl: template.source_metadata?.referenceUrl,
+        note: template.source_metadata?.note ?? "内置中文模板。"
+      },
+      safetyNotes: template.safety_notes
+    } as BuiltinPromptTemplate,
+    values
+  );
+}
+
+function readInitialVariableValues(template: TemplateRecord) {
+  if (template.source === "mine") {
+    return {};
+  }
+
+  return Object.fromEntries(
+    template.variables.map((variable) => [variable.key, variable.defaultValue ?? ""])
+  );
+}
+
+function updateBuiltinFavorite(
+  library: TemplateLibrary | null,
+  templateId: string,
+  isFavorite: boolean
+): TemplateLibrary | null {
+  if (!library) {
+    return library;
+  }
+
+  const favoriteSet = new Set(library.favorite_template_ids);
+  if (isFavorite) {
+    favoriteSet.add(templateId);
+  } else {
+    favoriteSet.delete(templateId);
+  }
+
+  return {
+    ...library,
+    favorite_template_ids: Array.from(favoriteSet),
+    templates: {
+      ...library.templates,
+      builtin: library.templates.builtin.map((template) =>
+        template.id === templateId ? { ...template, is_favorite: isFavorite } : template
+      )
+    }
+  };
+}
+
+function matchesTemplateQuery(template: TemplateRecord, query: string) {
+  const normalizedQuery = query.trim().toLocaleLowerCase("zh-CN");
+  if (!normalizedQuery) {
+    return true;
+  }
+
+  const values = [
+    template.title,
+    template.category_name,
+    template.mode,
+    ...template.tags,
+    template.prompt
+  ];
+
+  if (template.source === "builtin") {
+    for (const variable of template.variables) {
+      values.push(variable.key, variable.label, variable.placeholder);
+    }
+  }
+
+  return values.join("\n").toLocaleLowerCase("zh-CN").includes(normalizedQuery);
 }
 
 function formatUsage(usage?: DailyUsage): string {
