@@ -24,6 +24,7 @@
     "@types/react-dom": "latest",
     "eslint": "^9.39.1",
     "eslint-config-next": "latest",
+    "jsdom": "^29.1.1",
     "typescript": "latest",
     "vitest": "latest"
   }

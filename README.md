@@ -3,8 +3,8 @@
 `image-service` 是个人 AI 服务体系中的生图网页服务。
 
 当前已创建 Next.js 应用骨架、登录边界、SQLite 数据层、provider allowlist、
-OpenAI 兼容 Images API adapter、生成 API 和 Prompt 配方保存 API。测试使用 mock
-provider，不调用真实 provider。
+OpenAI 兼容 Images API adapter、生成 API、Prompt 配方保存 API 和登录后的中文生图工作台。
+测试使用 mock provider，不调用真实 provider。
 
 ## 本地开发
 
@@ -50,6 +50,13 @@ git diff --check
 和 `output_format`。`user_id` 只来自服务端 Auth helper；接口不会接受客户端
 provider 配置、base URL 或 API key 元数据。生成 API 不会自动保存 Prompt 配方，
 只有显式调用 recipe API 才写入 `prompt_recipes`。
+
+## 前端生图工作台
+
+登录后访问 `/` 会进入生图工作台。页面参数控件来自 `/api/image-options` 的公开
+allowlist，支持文生图、参考图生图、临时预览、下载当前临时图片和手动保存配置。
+生成成功不会自动保存 Prompt 配方；生成图片 base64 只保留在当前浏览器状态中，不写入
+`localStorage`、SQLite、服务器磁盘或日志。
 
 ## 安全边界
 
