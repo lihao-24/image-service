@@ -21,16 +21,27 @@ vi.mock("@/lib/providers", async (importOriginal) => {
   };
 });
 
+vi.mock("@/lib/usage", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/usage")>();
+  return {
+    ...actual,
+    checkDailyQuota: vi.fn(actual.checkDailyQuota)
+  };
+});
+
 const { createServerSupabaseClient } = await import("@/lib/auth/server");
 const { openDatabase } = await import("@/lib/db");
 const { getDailyUsage, listGenerationLogs } = await import("@/lib/db");
 const { createOpenAICompatibleImagesAdapter } = await import("@/lib/providers");
+const { checkDailyQuota } = await import("@/lib/usage");
 const { POST } = await import("@/app/api/images/generations/route");
 const actualDb = await vi.importActual<typeof import("@/lib/db")>("@/lib/db");
+const actualUsage = await vi.importActual<typeof import("@/lib/usage")>("@/lib/usage");
 
 const mockCreateServerSupabaseClient = createServerSupabaseClient as Mock;
 const mockOpenDatabase = openDatabase as Mock;
 const mockCreateAdapter = createOpenAICompatibleImagesAdapter as Mock;
+const mockCheckDailyQuota = checkDailyQuota as Mock;
 let currentDb: import("@/lib/db").ImageDatabase;
 
 function createRequest(body: Record<string, unknown>) {
@@ -130,16 +141,25 @@ describe("POST /api/images/generations", () => {
 
   it("成功文生图调用 adapter，写成功日志，递增用量，只返回临时图片数据", async () => {
     mockUser();
-    const generateImage = vi.fn(async () => ({
-      b64Json: "base64-image",
-      raw: { data: [{ b64_json: "base64-image" }] }
-    }));
+    const events: string[] = [];
+    mockCheckDailyQuota.mockImplementationOnce((...args: Parameters<typeof checkDailyQuota>) => {
+      events.push("quota");
+      return actualUsage.checkDailyQuota(...args);
+    });
+    const generateImage = vi.fn(async () => {
+      events.push("provider");
+      return {
+        b64Json: "base64-image",
+        raw: { data: [{ b64_json: "base64-image" }] }
+      };
+    });
     mockCreateAdapter.mockReturnValue({ generateImage });
 
     const response = await POST(createRequest(validBody));
     const body = await response.json();
 
     expect(response.status).toBe(200);
+    expect(events).toEqual(["quota", "provider"]);
     expect(generateImage).toHaveBeenCalledTimes(1);
     expect(generateImage).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -184,6 +204,8 @@ describe("POST /api/images/generations", () => {
     });
     expect(JSON.stringify(logs)).not.toContain(validBody.prompt);
     expect(JSON.stringify(logs)).not.toContain("base64-image");
+    expect(JSON.stringify(logs)).not.toContain("test-key");
+    expect(JSON.stringify(logs)).not.toContain("Bearer");
     expect(getDailyUsage(currentDb, "user-w07", new Date().toISOString().slice(0, 10))).toBe(1);
   });
 
@@ -199,12 +221,42 @@ describe("POST /api/images/generations", () => {
 
     expect(response.status).toBe(502);
     expect(body.error).toBe("provider_request_failed");
+    expect(body.message).not.toContain("provider.internal");
+    expect(body.message).not.toContain("test-key");
+    expect(body.message).not.toContain("Error:");
     expect(getDailyUsage(currentDb, "user-w07", new Date().toISOString().slice(0, 10))).toBe(0);
     const logs = listGenerationLogs(currentDb, "user-w07");
     expect(logs).toHaveLength(1);
     expect(logs[0]).toMatchObject({
       status: "failed",
       errorCode: "provider_request_failed",
+      promptLength: validBody.prompt.length,
+      hasReferenceImage: false
+    });
+    expect(JSON.stringify(logs)).not.toContain(validBody.prompt);
+    expect(JSON.stringify(logs)).not.toContain("test-key");
+    expect(JSON.stringify(logs)).not.toContain("Error:");
+  });
+
+  it("provider 返回空图片时写失败日志，不递增 daily_usage", async () => {
+    mockUser();
+    const generateImage = vi.fn(async () => ({
+      b64Json: "",
+      raw: { data: [{ b64_json: "" }] }
+    }));
+    mockCreateAdapter.mockReturnValue({ generateImage });
+
+    const response = await POST(createRequest(validBody));
+    const body = await response.json();
+
+    expect(response.status).toBe(502);
+    expect(body.error).toBe("provider_response_invalid");
+    expect(getDailyUsage(currentDb, "user-w07", new Date().toISOString().slice(0, 10))).toBe(0);
+    const logs = listGenerationLogs(currentDb, "user-w07");
+    expect(logs).toHaveLength(1);
+    expect(logs[0]).toMatchObject({
+      status: "failed",
+      errorCode: "provider_response_invalid",
       promptLength: validBody.prompt.length,
       hasReferenceImage: false
     });

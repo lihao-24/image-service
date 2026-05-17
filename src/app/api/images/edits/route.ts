@@ -122,6 +122,31 @@ export async function POST(request: NextRequest | Request) {
       );
     }
 
+    if (!isUsableImageB64Json(result.b64Json)) {
+      const errorCode = "provider_response_invalid";
+      writeGenerationLog(db, userResult.userId, {
+        provider: paramsResult.params.provider,
+        model: paramsResult.params.model,
+        mode: IMAGE_EDIT_MODE,
+        size: paramsResult.params.size,
+        quality: paramsResult.params.quality,
+        outputFormat: paramsResult.params.outputFormat,
+        status: "failed",
+        errorCode,
+        durationMs: elapsedMs(startedAt),
+        prompt: formResult.body.prompt,
+        hasReferenceImage: true
+      });
+
+      return NextResponse.json(
+        {
+          error: errorCode,
+          message: "图片生成服务暂时不可用，请稍后再试。"
+        },
+        { status: 502 }
+      );
+    }
+
     const generationCount = incrementSuccessfulGenerationUsage(
       db,
       userResult.userId,
@@ -195,4 +220,8 @@ function normalizeProviderErrorCode(error: unknown): string {
   }
 
   return "provider_request_failed";
+}
+
+function isUsableImageB64Json(value: string): boolean {
+  return value.trim().length > 0;
 }
