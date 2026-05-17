@@ -141,6 +141,11 @@ function renderWorkbench() {
   return render(<ImageWorkbench config={publicConfig} userLabel="hao@example.com" />);
 }
 
+async function expandTemplateLibrary() {
+  const button = await screen.findByRole("button", { name: "展开提示词库" });
+  fireEvent.click(button);
+}
+
 beforeEach(() => {
   vi.stubGlobal("fetch", vi.fn());
   vi.stubGlobal(
@@ -158,10 +163,37 @@ afterEach(() => {
 });
 
 describe("ImageWorkbench", () => {
+  it("桌面提示词库默认折叠，可展开和收起", async () => {
+    mockFetchByRoute();
+
+    renderWorkbench();
+
+    expect(await screen.findByRole("button", { name: "展开提示词库" })).toBeTruthy();
+    expect(screen.queryByLabelText("搜索模板")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "展开提示词库" }));
+    expect(await screen.findByRole("button", { name: "收起提示词库" })).toBeTruthy();
+    expect(screen.getByLabelText("搜索模板")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "收起提示词库" }));
+    expect(screen.getByRole("button", { name: "展开提示词库" })).toBeTruthy();
+    expect(screen.queryByLabelText("搜索模板")).toBeNull();
+  });
+
+  it("顶部使用紧凑状态栏，不再渲染大 H1 生图工作台", () => {
+    mockFetchByRoute();
+
+    renderWorkbench();
+
+    expect(screen.queryByRole("heading", { level: 1, name: "生图工作台" })).toBeNull();
+    expect(screen.getByText("生图工作台")).toBeTruthy();
+  });
+
   it("初始加载模板库并渲染来源切换、分类和模板", async () => {
     mockFetchByRoute();
 
     renderWorkbench();
+    await expandTemplateLibrary();
 
     expect(await screen.findByRole("button", { name: "内置模板" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "我的模板" })).toBeTruthy();
@@ -175,6 +207,7 @@ describe("ImageWorkbench", () => {
     mockFetchByRoute();
 
     renderWorkbench();
+    await expandTemplateLibrary();
     await screen.findByRole("button", { name: /选择模板 电商白底质感主图/ });
 
     fireEvent.change(screen.getByLabelText("搜索模板"), { target: { value: "流程" } });
@@ -195,6 +228,7 @@ describe("ImageWorkbench", () => {
     const fetchMock = mockFetchByRoute();
 
     renderWorkbench();
+    await expandTemplateLibrary();
     fireEvent.click(await screen.findByRole("button", { name: /选择模板 电商白底质感主图/ }));
 
     expect(await screen.findByText("模板变量")).toBeTruthy();
@@ -207,6 +241,7 @@ describe("ImageWorkbench", () => {
     mockFetchByRoute();
 
     renderWorkbench();
+    await expandTemplateLibrary();
     fireEvent.click(await screen.findByRole("button", { name: /选择模板 电商白底质感主图/ }));
 
     fireEvent.click(screen.getByRole("button", { name: "替换当前 prompt" }));
@@ -239,6 +274,7 @@ describe("ImageWorkbench", () => {
     mockFetchByRoute();
 
     renderWorkbench();
+    await expandTemplateLibrary();
     fireEvent.change(screen.getByLabelText("Prompt"), {
       target: { value: "保留品牌高级感" }
     });
@@ -259,6 +295,7 @@ describe("ImageWorkbench", () => {
     const fetchMock = mockFetchByRoute();
 
     renderWorkbench();
+    await expandTemplateLibrary();
     const templateButton = await screen.findByRole("button", {
       name: /选择模板 电商白底质感主图/
     });
@@ -294,6 +331,7 @@ describe("ImageWorkbench", () => {
     fireEvent.click(screen.getByRole("button", { name: "保存配置" }));
 
     await screen.findByText("配置已保存。");
+    await expandTemplateLibrary();
     fireEvent.click(screen.getByRole("button", { name: "我的模板" }));
 
     expect(await screen.findByRole("button", { name: /选择模板 我的玻璃杯配置/ })).toBeTruthy();
