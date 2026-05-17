@@ -105,6 +105,68 @@ h1 {
   width: 10px;
 }
 
+.auth-page {
+  align-items: center;
+  display: flex;
+}
+
+.auth-panel {
+  margin: 0 auto;
+  max-width: 520px;
+  width: 100%;
+}
+
+.field {
+  display: grid;
+  gap: 8px;
+  margin: 18px 0;
+}
+
+.field span {
+  color: var(--foreground);
+  font-weight: 700;
+}
+
+.field input {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--foreground);
+  font: inherit;
+  min-height: 46px;
+  padding: 10px 12px;
+}
+
+.form-error {
+  color: #b42318;
+  line-height: 1.5;
+  margin: 12px 0;
+}
+
+.primary-button,
+.secondary-button {
+  border-radius: 8px;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 700;
+  min-height: 44px;
+  padding: 10px 16px;
+}
+
+.primary-button {
+  background: var(--accent);
+  border: 1px solid var(--accent);
+  color: #ffffff;
+  width: 100%;
+}
+
+.secondary-button {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--foreground);
+  margin-top: 20px;
+}
+
 @media (max-width: 640px) {
   .page-shell {
     padding: 32px 18px;

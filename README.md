@@ -21,6 +21,12 @@ pnpm build
 git diff --check
 ```
 
+## Supabase Auth
+
+应用入口通过 Supabase Auth cookie session 保护。未登录访问 `/` 会跳转到
+`/auth/login`，受保护 API 可复用 `src/lib/auth` 中的服务端 helper。
+`user_id` 只来自 `supabase.auth.getUser()` 校验后的用户，不接受客户端传入。
+
 ## 安全边界
 
 - 不提交真实 `.env`、API key、数据库文件、上传文件或生成图片。
@@ -31,7 +37,7 @@ git diff --check
 ## 模块边界
 
 - `src/app/`：页面、路由和健康检查。
-- `src/lib/auth/`：Supabase Auth helper，占位等待 W04。
+- `src/lib/auth/`：Supabase Auth 服务端 helper、cookie session 刷新和用户校验。
 - `src/lib/config/`：服务端配置解析、provider allowlist 和默认参数。
 - `src/lib/db/`：SQLite 连接和查询 helper，占位等待 W05。
 - `src/lib/providers/`：provider adapter，占位等待 W06。

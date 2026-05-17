@@ -1,6 +1,10 @@
+import { getSessionUser } from "@/lib/auth";
+import { createServerSupabaseClient } from "@/lib/auth/server";
 import { getPublicImageConfig } from "@/lib/config";
 
-export default function Home() {
+export default async function Home() {
+  const supabase = await createServerSupabaseClient();
+  const auth = await getSessionUser(supabase);
   const config = getPublicImageConfig();
   const provider = config.providers.find(
     (item) => item.id === config.defaultProvider
@@ -10,13 +14,16 @@ export default function Home() {
     <main className="page-shell">
       <div className="page-content">
         <p className="eyebrow">image-service MVP</p>
-        <h1>生图服务骨架已就绪</h1>
+        <h1>生图服务入口已受登录保护</h1>
         <p className="lead">
-          当前页面只用于确认 Next.js 应用、TypeScript、lint 和测试工具链可运行。
-          生成、登录、数据库和 provider 调用会在后续工作窗口接入。
+          当前页面只展示登录后的应用 shell。生成、数据库和 provider 调用会在后续工作窗口接入。
         </p>
 
         <section className="status-grid" aria-label="初始化状态">
+          <article className="status-card">
+            <h2>当前用户</h2>
+            <p>{auth.ok ? auth.user.email ?? auth.userId : "未登录"}</p>
+          </article>
           <article className="status-card">
             <h2>默认 Provider</h2>
             <p>{provider?.label ?? "未配置"}，仅公开模型 allowlist。</p>
@@ -38,6 +45,12 @@ export default function Home() {
           <span className="health-dot" aria-hidden="true" />
           <span>健康页可用：/health</span>
         </div>
+
+        <form action="/auth/logout" method="post">
+          <button className="secondary-button" type="submit">
+            退出登录
+          </button>
+        </form>
       </div>
     </main>
   );
