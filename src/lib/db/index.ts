@@ -200,6 +200,85 @@ export function listPromptRecipes(db: ImageDatabase, userId: string): PromptReci
     .map(mapPromptRecipeRow);
 }
 
+export type PromptRecipeUpdateInput = Partial<PromptRecipeInput>;
+
+export function updatePromptRecipe(
+  db: ImageDatabase,
+  userId: string,
+  recipeId: string,
+  input: PromptRecipeUpdateInput
+): PromptRecipe | null {
+  const current = getPromptRecipeById(db, userId, recipeId);
+  if (!current) {
+    return null;
+  }
+
+  const next = {
+    title: input.title ?? current.title,
+    prompt: input.prompt ?? current.prompt,
+    negativePrompt:
+      input.negativePrompt === undefined ? current.negativePrompt : input.negativePrompt,
+    mode: input.mode ?? current.mode,
+    provider: input.provider ?? current.provider,
+    model: input.model ?? current.model,
+    size: input.size ?? current.size,
+    quality: input.quality ?? current.quality,
+    outputFormat: input.outputFormat ?? current.outputFormat,
+    params: input.params ?? current.params,
+    referenceMode: input.referenceMode === undefined ? current.referenceMode : input.referenceMode,
+    isFavorite: input.isFavorite ?? current.isFavorite
+  };
+
+  db.prepare(
+    `
+      UPDATE prompt_recipes
+      SET title = ?,
+          prompt = ?,
+          negative_prompt = ?,
+          mode = ?,
+          provider = ?,
+          model = ?,
+          size = ?,
+          quality = ?,
+          output_format = ?,
+          params_json = ?,
+          reference_mode = ?,
+          is_favorite = ?,
+          updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+      WHERE user_id = ? AND id = ?
+    `
+  ).run(
+    next.title,
+    next.prompt,
+    next.negativePrompt,
+    next.mode,
+    next.provider,
+    next.model,
+    next.size,
+    next.quality,
+    next.outputFormat,
+    JSON.stringify(next.params),
+    next.referenceMode,
+    next.isFavorite ? 1 : 0,
+    userId,
+    recipeId
+  );
+
+  return getPromptRecipeById(db, userId, recipeId);
+}
+
+export function deletePromptRecipe(
+  db: ImageDatabase,
+  userId: string,
+  recipeId: string
+): boolean {
+  const result = db
+    .prepare("DELETE FROM prompt_recipes WHERE user_id = ? AND id = ?")
+    .run(userId, recipeId);
+
+  return result.changes > 0;
+}
+
 export function logGeneration(
   db: ImageDatabase,
   userId: string,

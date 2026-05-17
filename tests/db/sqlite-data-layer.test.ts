@@ -108,6 +108,32 @@ describe("SQLite 数据层", () => {
     }
   });
 
+  test("prompt_recipes 不包含生成图片或参考图文件字段", () => {
+    const db = openDatabase(dbPath);
+    try {
+      initializeDatabase(db);
+
+      const columns = tableColumns(db, "prompt_recipes");
+
+      expect(columns).not.toEqual(
+        expect.arrayContaining([
+          "image",
+          "image_bytes",
+          "image_b64",
+          "generated_image",
+          "generated_image_bytes",
+          "reference_image",
+          "reference_image_bytes",
+          "reference_image_path",
+          "reference_file",
+          "reference_file_path"
+        ])
+      );
+    } finally {
+      closeDatabase(db);
+    }
+  });
+
   test("Prompt 配方 helper 只能读取当前用户数据", () => {
     const db = openDatabase(dbPath);
     try {

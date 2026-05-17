@@ -31,7 +31,7 @@ vi.mock("@/lib/usage", async (importOriginal) => {
 
 const { createServerSupabaseClient } = await import("@/lib/auth/server");
 const { openDatabase } = await import("@/lib/db");
-const { getDailyUsage, listGenerationLogs } = await import("@/lib/db");
+const { getDailyUsage, listGenerationLogs, listPromptRecipes } = await import("@/lib/db");
 const { createOpenAICompatibleImagesAdapter } = await import("@/lib/providers");
 const { checkDailyQuota } = await import("@/lib/usage");
 const { POST } = await import("@/app/api/images/generations/route");
@@ -207,6 +207,7 @@ describe("POST /api/images/generations", () => {
     expect(JSON.stringify(logs)).not.toContain("test-key");
     expect(JSON.stringify(logs)).not.toContain("Bearer");
     expect(getDailyUsage(currentDb, "user-w07", new Date().toISOString().slice(0, 10))).toBe(1);
+    expect(listPromptRecipes(currentDb, "user-w07")).toHaveLength(0);
   });
 
   it("provider 失败写失败日志，不递增 daily_usage", async () => {
