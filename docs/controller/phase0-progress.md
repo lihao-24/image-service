@@ -48,7 +48,7 @@
 | 正式 spec review | 已完成 | c51e568 | W01 完成；无阻塞；`git diff --check` 通过；提交只包含三份 W01 文档。 |
 | 实施计划 | 已完成 | fa3ea83 | W02 完成；创建 `docs/plans/2026-05-17-image-service-mvp-implementation-plan.md` 并按项目语言要求改为中文；无阻塞。 |
 | 工作窗口提示词 | 已完成 | fa3ea83 | 用户确认后续提示词直接由主控窗口发出，不再创建提示词文档；W02 已拆分 W03-W12；后续窗口必须要求提交。 |
-| Next.js 实现 | 未开始 |  | 下一步为 W03 Next.js Project Initialization，进入实现阶段前等待用户确认派发。 |
+| Next.js 实现 | 进行中 |  | W03 Next.js 项目初始化已派发，等待工作窗口结果回传。 |
 
 ## 阶段结论
 
@@ -63,3 +63,4 @@
 - 2026-05-17：W02 实施计划完成，待提交。新增 `docs/plans/2026-05-17-image-service-mvp-implementation-plan.md`，拆分 W03-W12：Next.js 初始化、Supabase Auth、SQLite 数据层、Provider adapter/allowlist、文生图 API、参考图生图 API、每日额度与 generation log、保存配置与用户隔离、前端页面、阶段收口 review；无阻塞。
 - 2026-05-17：用户补充长期规则：每个工作窗口完成后必须提交并回传 commit hash；本项目是中文网站，后续文档、代码注释、界面文案和用户可见说明优先中文。主控已将 W02 实施计划改为中文。
 - 2026-05-17：W02 实施计划和主控规则已提交，提交 `fa3ea83 docs: add image service implementation plan`。
+- 2026-05-17：派发 W03 Next.js 项目初始化工作窗口，等待结果回传。
