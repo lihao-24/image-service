@@ -48,11 +48,13 @@
 | 正式 spec review | 已完成 | c51e568 | W01 完成；无阻塞；`git diff --check` 通过；提交只包含三份 W01 文档。 |
 | 实施计划 | 已完成 | fa3ea83 | W02 完成；创建 `docs/plans/2026-05-17-image-service-mvp-implementation-plan.md` 并按项目语言要求改为中文；无阻塞。 |
 | 工作窗口提示词 | 已完成 | fa3ea83 | 用户确认后续提示词直接由主控窗口发出，不再创建提示词文档；W02 已拆分 W03-W12；后续窗口必须要求提交。 |
-| Next.js 实现 | 进行中 | f9c53ca | W03-W11 已完成；W12 基础验证与阶段收口 review 待派发。 |
+| Next.js 实现 | 已完成 | 04094c7 | W03-W12 已完成；基础验证与阶段收口 review 通过，无阻塞。 |
 
 ## 阶段结论
 
-未完成。
+已完成。
+
+W12 收口验证通过。下一阶段建议进入部署准备；部署前补齐生产环境变量和数据目录确认，然后做一次受控 provider smoke test。禁止提交运行时数据库、生成图片或密钥。
 
 ## 主控记录
 
@@ -73,3 +75,4 @@
 - 2026-05-17：W09 每日额度与 generation log 加固完成，提交 `647c85d test: harden generation quota logging`。复核两个生成 API 的额度和日志语义，发现并修复 adapter 返回空 `b64Json` 时可能被计为成功的缺口；现在仅 provider 成功返回非空可用图片后递增 `daily_usage`，额度用尽写 rejected 且不调用 provider，失败写 failed 且不递增，日志只保存元信息；验证 `pnpm lint`、`pnpm typecheck`、`pnpm test`、`pnpm build`、`git diff --check` 通过；无阻塞。
 - 2026-05-17：W10 保存配置与用户隔离完成，提交 `9b81f8a feat: add prompt recipe persistence`。新增 recipe save/list/read/update/delete API、recipe 校验和按用户隔离 CRUD helper；保存时复用 allowlist 校验并拒绝 provider config/base URL/API key 元数据；用户 A 不能读取或修改用户 B 的 recipe；生成 API 不自动保存 recipe；recipe 不保存生成图片或参考图文件列；验证 `pnpm lint`、`pnpm typecheck`、`pnpm test`、`pnpm build`、`git diff --check` 通过；无阻塞。
 - 2026-05-17：W11 前端生图页面完成，提交 `f9c53ca feat: add image generation workbench`。`/` 变为登录后的中文生图工作台，支持 allowlist 驱动参数、文生图、参考图生图、临时预览、下载、手动保存配置和 loading/success/saved/error 状态；组件测试覆盖 allowlist、生成不自动保存、保存配置、参考图和脱敏错误；确认未使用 localStorage/sessionStorage，客户端不发送 provider key/base URL/apiKeyEnv；验证 `pnpm lint`、`pnpm typecheck`、`pnpm test`、`pnpm build`、`git diff --check` 通过，浏览器未登录跳转通过；无阻塞。
+- 2026-05-17：W12 基础验证与阶段收口 review 完成，提交 `04094c7 docs: add w12 phase closeout review`。新增 `docs/reports/2026-05-17-w12-phase-closeout-review.md`；验证 `pnpm lint`、`pnpm typecheck`、`pnpm test`（13 个 test files、59 个 tests）、`pnpm build`、`git diff --check` 全部通过；验收清单覆盖未登录保护、文生图 data[0]、参考图 data[1]/fallback、图片不保存、配置只手动保存、generation log 不保存 prompt 全文、allowlist、每日额度和用户隔离；仓库扫描未发现真实 `.env`、SQLite/db 文件、上传/生成图片、密钥或长 base64；无阻塞。
