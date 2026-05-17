@@ -48,7 +48,7 @@
 | 正式 spec review | 已完成 | c51e568 | W01 完成；无阻塞；`git diff --check` 通过；提交只包含三份 W01 文档。 |
 | 实施计划 | 已完成 | fa3ea83 | W02 完成；创建 `docs/plans/2026-05-17-image-service-mvp-implementation-plan.md` 并按项目语言要求改为中文；无阻塞。 |
 | 工作窗口提示词 | 已完成 | fa3ea83 | 用户确认后续提示词直接由主控窗口发出，不再创建提示词文档；W02 已拆分 W03-W12；后续窗口必须要求提交。 |
-| Next.js 实现 | 进行中 | 0701130 | W03 Next.js 项目初始化完成；W04 Supabase Auth 接入待派发。 |
+| Next.js 实现 | 进行中 | df45fc8 | W03 Next.js 项目初始化和 W04 Supabase Auth 接入完成；W05 SQLite 数据层与 schema 待派发。 |
 
 ## 阶段结论
 
@@ -65,3 +65,4 @@
 - 2026-05-17：W02 实施计划和主控规则已提交，提交 `fa3ea83 docs: add image service implementation plan`。
 - 2026-05-17：派发 W03 Next.js 项目初始化工作窗口，等待结果回传。
 - 2026-05-17：W03 Next.js 项目初始化完成，提交 `0701130 chore: scaffold next app`。使用 `pnpm`，创建 Next.js App Router 骨架、TypeScript/ESLint/Vitest 配置、安全 `.env.example`、中文首页、`/health` 健康端点和 `src/lib/*` 模块占位；验证 `pnpm install`、`pnpm lint`、`pnpm typecheck`、`pnpm test`、`pnpm build`、`git diff --check`、浏览器首页和 `/health` 均通过；无阻塞。
+- 2026-05-17：W04 Supabase Auth 接入完成，提交 `df45fc8 feat: add supabase auth boundary`。新增 Supabase SSR server client、cookie session 刷新、`getSessionUser` / `getRequiredUserId` helper、登录/登出路由、受保护 API 示例和 route guard；`user_id` 只来自服务端 `supabase.auth.getUser()` 校验后的 `user.id`；验证 `pnpm lint`、`pnpm typecheck`、`pnpm test`、`pnpm build`、`git diff --check` 和浏览器未登录跳转均通过；无阻塞。
