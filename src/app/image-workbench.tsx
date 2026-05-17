@@ -513,7 +513,7 @@ export default function ImageWorkbench({ config, userLabel }: ImageWorkbenchProp
         </div>
       </header>
 
-      <nav className="mobile-panel-switch" aria-label="工作台分区">
+      <nav className="mobile-only-panel-switch" aria-label="移动端工作台分区">
         {[
           ["templates", "模板"],
           ["editor", "编辑"],
@@ -880,12 +880,14 @@ export default function ImageWorkbench({ config, userLabel }: ImageWorkbenchProp
           className={mobilePanel === "preview" ? "preview-panel is-mobile-active" : "preview-panel"}
         >
           <SectionHeader title="预览" meta={usageText || "今日用量将在生成后显示"} />
-          <div className="preview-frame">
+          <div className="preview-viewport" role="region" aria-label="预览画布">
             {image ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img alt="当前生成图片预览" src={image.src} />
+              <img alt="当前生成图片预览" className="preview-image" src={image.src} />
             ) : (
-              <div className="empty-preview">等待生成</div>
+              <div className="empty-preview">
+                <span>等待生成</span>
+              </div>
             )}
           </div>
           <div className="preview-footer">

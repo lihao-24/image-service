@@ -189,6 +189,29 @@ describe("ImageWorkbench", () => {
     expect(screen.getByText("生图工作台")).toBeTruthy();
   });
 
+  it("桌面不再使用占位分区导航，移动端分区导航语义明确", () => {
+    mockFetchByRoute();
+
+    renderWorkbench();
+
+    expect(screen.queryByLabelText("工作台分区")).toBeNull();
+    const mobileSwitch = screen.getByLabelText("移动端工作台分区");
+    expect(mobileSwitch.className).toContain("mobile-only-panel-switch");
+    expect(within(mobileSwitch).getByRole("button", { name: "模板" })).toBeTruthy();
+    expect(within(mobileSwitch).getByRole("button", { name: "编辑" })).toBeTruthy();
+    expect(within(mobileSwitch).getByRole("button", { name: "预览" })).toBeTruthy();
+  });
+
+  it("预览空状态使用稳定画布并完整展示等待生成", () => {
+    mockFetchByRoute();
+
+    renderWorkbench();
+
+    const viewport = screen.getByRole("region", { name: "预览画布" });
+    expect(viewport.className).toContain("preview-viewport");
+    expect(within(viewport).getByText("等待生成")).toBeTruthy();
+  });
+
   it("初始加载模板库并渲染来源切换、分类和模板", async () => {
     mockFetchByRoute();
 
