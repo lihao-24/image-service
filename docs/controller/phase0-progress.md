@@ -48,7 +48,7 @@
 | 正式 spec review | 已完成 | c51e568 | W01 完成；无阻塞；`git diff --check` 通过；提交只包含三份 W01 文档。 |
 | 实施计划 | 已完成 | fa3ea83 | W02 完成；创建 `docs/plans/2026-05-17-image-service-mvp-implementation-plan.md` 并按项目语言要求改为中文；无阻塞。 |
 | 工作窗口提示词 | 已完成 | fa3ea83 | 用户确认后续提示词直接由主控窗口发出，不再创建提示词文档；W02 已拆分 W03-W12；后续窗口必须要求提交。 |
-| Next.js 实现 | 进行中 | 9b81f8a | W03-W10 已完成；W11 前端生图页面待派发。 |
+| Next.js 实现 | 进行中 | f9c53ca | W03-W11 已完成；W12 基础验证与阶段收口 review 待派发。 |
 
 ## 阶段结论
 
@@ -72,3 +72,4 @@
 - 2026-05-17：W08 参考图生图 API 完成，提交 `31376eb feat: add reference image generation api`。新增 `POST /api/images/edits`，支持 multipart 参考图校验，限制最大 10MB 且 MIME 仅允许 PNG/JPEG/WebP；串联 auth、allowlist、额度、edits adapter、generation log 和 daily_usage；测试覆盖 `data[1]` 优先和 `data[0]` fallback、quota/log、隐私边界，确认不保存参考图、生成图或 prompt 全文；验证 `pnpm lint`、`pnpm typecheck`、`pnpm test`、`pnpm build`、`git diff --check` 通过；无阻塞。
 - 2026-05-17：W09 每日额度与 generation log 加固完成，提交 `647c85d test: harden generation quota logging`。复核两个生成 API 的额度和日志语义，发现并修复 adapter 返回空 `b64Json` 时可能被计为成功的缺口；现在仅 provider 成功返回非空可用图片后递增 `daily_usage`，额度用尽写 rejected 且不调用 provider，失败写 failed 且不递增，日志只保存元信息；验证 `pnpm lint`、`pnpm typecheck`、`pnpm test`、`pnpm build`、`git diff --check` 通过；无阻塞。
 - 2026-05-17：W10 保存配置与用户隔离完成，提交 `9b81f8a feat: add prompt recipe persistence`。新增 recipe save/list/read/update/delete API、recipe 校验和按用户隔离 CRUD helper；保存时复用 allowlist 校验并拒绝 provider config/base URL/API key 元数据；用户 A 不能读取或修改用户 B 的 recipe；生成 API 不自动保存 recipe；recipe 不保存生成图片或参考图文件列；验证 `pnpm lint`、`pnpm typecheck`、`pnpm test`、`pnpm build`、`git diff --check` 通过；无阻塞。
+- 2026-05-17：W11 前端生图页面完成，提交 `f9c53ca feat: add image generation workbench`。`/` 变为登录后的中文生图工作台，支持 allowlist 驱动参数、文生图、参考图生图、临时预览、下载、手动保存配置和 loading/success/saved/error 状态；组件测试覆盖 allowlist、生成不自动保存、保存配置、参考图和脱敏错误；确认未使用 localStorage/sessionStorage，客户端不发送 provider key/base URL/apiKeyEnv；验证 `pnpm lint`、`pnpm typecheck`、`pnpm test`、`pnpm build`、`git diff --check` 通过，浏览器未登录跳转通过；无阻塞。
