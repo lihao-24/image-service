@@ -48,7 +48,7 @@
 | 正式 spec review | 已完成 | c51e568 | W01 完成；无阻塞；`git diff --check` 通过；提交只包含三份 W01 文档。 |
 | 实施计划 | 已完成 | fa3ea83 | W02 完成；创建 `docs/plans/2026-05-17-image-service-mvp-implementation-plan.md` 并按项目语言要求改为中文；无阻塞。 |
 | 工作窗口提示词 | 已完成 | fa3ea83 | 用户确认后续提示词直接由主控窗口发出，不再创建提示词文档；W02 已拆分 W03-W12；后续窗口必须要求提交。 |
-| Next.js 实现 | 进行中 | 5d9f77c | W03-W07 已完成；W08 参考图生图 API 待派发。 |
+| Next.js 实现 | 进行中 | 31376eb | W03-W08 已完成；W09 每日额度与 generation log 加固待派发。 |
 
 ## 阶段结论
 
@@ -69,3 +69,4 @@
 - 2026-05-17：W05 SQLite 数据层与 schema 完成，提交 `088f312 feat: add sqlite data layer`。新增本地 SQLite 初始化、`prompt_recipes`、`generation_logs`、`daily_usage` schema 和用户隔离测试；`generation_logs` 只保存元信息，不含 prompt 全文、图片字段或 API key；默认数据库路径为 `./data/image-service.sqlite`，测试使用 `/tmp/image-service-sqlite-tests` 临时库并清理 sidecar；验证 `pnpm lint`、`pnpm typecheck`、`pnpm test`、`pnpm build`、`git diff --check` 通过；无阻塞。
 - 2026-05-17：W06 Provider adapter 与 allowlist 完成，提交 `ee375f1 feat: add provider adapter allowlist`。新增 provider 配置变量解析、公开 `/api/image-options` allowlist、参数校验 helper 和可注入 fetch 的 OpenAI 兼容 Images adapter；公开 allowlist 不包含 `baseUrl`、`apiKeyEnv` 或 API key；mock 测试覆盖 generations/edits endpoint，未调用真实 provider；验证 `pnpm lint`、`pnpm typecheck`、`pnpm test`、`pnpm build`、`git diff --check` 通过；无阻塞。
 - 2026-05-17：W07 文生图 API 完成，提交 `5d9f77c feat: add text to image generation api`。新增 `POST /api/images/generations`，串联 auth、allowlist、额度预检查、provider adapter、generation log 和成功后 daily_usage 递增；成功返回临时 base64 和 UI 元信息，不保存图片或 prompt 全文；额度用尽不调用 provider，provider 失败不递增用量；验证 `pnpm lint`、`pnpm typecheck`、`pnpm test`、`pnpm build`、`git diff --check` 通过；无阻塞。
+- 2026-05-17：W08 参考图生图 API 完成，提交 `31376eb feat: add reference image generation api`。新增 `POST /api/images/edits`，支持 multipart 参考图校验，限制最大 10MB 且 MIME 仅允许 PNG/JPEG/WebP；串联 auth、allowlist、额度、edits adapter、generation log 和 daily_usage；测试覆盖 `data[1]` 优先和 `data[0]` fallback、quota/log、隐私边界，确认不保存参考图、生成图或 prompt 全文；验证 `pnpm lint`、`pnpm typecheck`、`pnpm test`、`pnpm build`、`git diff --check` 通过；无阻塞。
