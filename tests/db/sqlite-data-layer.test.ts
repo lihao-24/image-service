@@ -3,16 +3,19 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
 import {
+  addTemplateFavorite,
   closeDatabase,
   createPromptRecipe,
   getDailyUsage,
   getPromptRecipeById,
   incrementDailyUsage,
   initializeDatabase,
+  listTemplateFavorites,
   listGenerationLogs,
   listPromptRecipes,
   logGeneration,
-  openDatabase
+  openDatabase,
+  removeTemplateFavorite
 } from "@/lib/db";
 
 const TEST_ROOT = join(tmpdir(), "image-service-sqlite-tests");
@@ -31,7 +34,7 @@ describe("SQLite 数据层", () => {
     await rm(`${dbPath}-wal`, { force: true });
   });
 
-  test("初始化三张表并包含关键列", () => {
+  test("初始化四张表并包含关键列", () => {
     const db = openDatabase(dbPath);
     try {
       initializeDatabase(db);
@@ -76,6 +79,9 @@ describe("SQLite 数据层", () => {
       );
       expect(tableColumns(db, "daily_usage")).toEqual(
         expect.arrayContaining(["user_id", "usage_date", "generation_count"])
+      );
+      expect(tableColumns(db, "template_favorites")).toEqual(
+        expect.arrayContaining(["user_id", "template_id", "created_at"])
       );
     } finally {
       closeDatabase(db);
@@ -231,6 +237,61 @@ describe("SQLite 数据层", () => {
       expect(getDailyUsage(db, "user-a", "2026-05-17")).toBe(2);
       expect(getDailyUsage(db, "user-b", "2026-05-17")).toBe(1);
       expect(getDailyUsage(db, "user-a", "2026-05-18")).toBe(0);
+    } finally {
+      closeDatabase(db);
+    }
+  });
+
+  test("template_favorites helper 幂等收藏、列出和删除当前用户内置模板收藏", () => {
+    const db = openDatabase(dbPath);
+    try {
+      initializeDatabase(db);
+
+      const first = addTemplateFavorite(db, "user-a", "builtin-ecommerce-clean-packshot");
+      const second = addTemplateFavorite(db, "user-a", "builtin-ecommerce-clean-packshot");
+      addTemplateFavorite(db, "user-a", "builtin-social-xiaohongshu-cover");
+
+      expect(second).toEqual(first);
+      expect(listTemplateFavorites(db, "user-a")).toMatchObject([
+        {
+          userId: "user-a",
+          templateId: "builtin-social-xiaohongshu-cover"
+        },
+        {
+          userId: "user-a",
+          templateId: "builtin-ecommerce-clean-packshot"
+        }
+      ]);
+      expect(removeTemplateFavorite(db, "user-a", "builtin-ecommerce-clean-packshot")).toBe(true);
+      expect(removeTemplateFavorite(db, "user-a", "builtin-ecommerce-clean-packshot")).toBe(false);
+      expect(listTemplateFavorites(db, "user-a").map((favorite) => favorite.templateId)).toEqual([
+        "builtin-social-xiaohongshu-cover"
+      ]);
+    } finally {
+      closeDatabase(db);
+    }
+  });
+
+  test("template_favorites helper 只返回当前用户收藏", () => {
+    const db = openDatabase(dbPath);
+    try {
+      initializeDatabase(db);
+
+      addTemplateFavorite(db, "user-a", "builtin-ecommerce-clean-packshot");
+      addTemplateFavorite(db, "user-b", "builtin-social-xiaohongshu-cover");
+
+      expect(listTemplateFavorites(db, "user-a")).toMatchObject([
+        {
+          userId: "user-a",
+          templateId: "builtin-ecommerce-clean-packshot"
+        }
+      ]);
+      expect(listTemplateFavorites(db, "user-b")).toMatchObject([
+        {
+          userId: "user-b",
+          templateId: "builtin-social-xiaohongshu-cover"
+        }
+      ]);
     } finally {
       closeDatabase(db);
     }

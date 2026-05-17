@@ -72,6 +72,12 @@ export interface GenerationLog {
   createdAt: string;
 }
 
+export interface TemplateFavorite {
+  userId: string;
+  templateId: string;
+  createdAt: string;
+}
+
 export function getDatabasePath(env: NodeJS.ProcessEnv = process.env) {
   return env.IMAGE_SERVICE_SQLITE_PATH ?? "./data/image-service.sqlite";
 }
@@ -140,6 +146,16 @@ export function initializeDatabase(db: ImageDatabase) {
       generation_count INTEGER NOT NULL DEFAULT 0 CHECK (generation_count >= 0),
       PRIMARY KEY (user_id, usage_date)
     );
+
+    CREATE TABLE IF NOT EXISTS template_favorites (
+      user_id TEXT NOT NULL,
+      template_id TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+      PRIMARY KEY (user_id, template_id)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_template_favorites_user_created
+      ON template_favorites (user_id, created_at DESC);
   `);
 }
 
@@ -352,6 +368,70 @@ export function incrementDailyUsage(
   return getDailyUsage(db, userId, usageDate);
 }
 
+export function addTemplateFavorite(
+  db: ImageDatabase,
+  userId: string,
+  templateId: string
+): TemplateFavorite {
+  db.prepare(
+    `
+      INSERT INTO template_favorites (user_id, template_id)
+      VALUES (?, ?)
+      ON CONFLICT(user_id, template_id) DO NOTHING
+    `
+  ).run(userId, templateId);
+
+  const favorite = getTemplateFavorite(db, userId, templateId);
+  if (!favorite) {
+    throw new Error("保存内置提示词模板收藏失败");
+  }
+  return favorite;
+}
+
+export function removeTemplateFavorite(
+  db: ImageDatabase,
+  userId: string,
+  templateId: string
+): boolean {
+  const result = db
+    .prepare("DELETE FROM template_favorites WHERE user_id = ? AND template_id = ?")
+    .run(userId, templateId);
+
+  return result.changes > 0;
+}
+
+export function listTemplateFavorites(
+  db: ImageDatabase,
+  userId: string
+): TemplateFavorite[] {
+  return db
+    .prepare(
+      "SELECT * FROM template_favorites WHERE user_id = ? ORDER BY created_at DESC, template_id DESC"
+    )
+    .all(userId)
+    .map(mapTemplateFavoriteRow);
+}
+
+export function isTemplateFavorite(
+  db: ImageDatabase,
+  userId: string,
+  templateId: string
+): boolean {
+  return getTemplateFavorite(db, userId, templateId) !== null;
+}
+
+function getTemplateFavorite(
+  db: ImageDatabase,
+  userId: string,
+  templateId: string
+): TemplateFavorite | null {
+  const row = db
+    .prepare("SELECT * FROM template_favorites WHERE user_id = ? AND template_id = ?")
+    .get(userId, templateId);
+
+  return row ? mapTemplateFavoriteRow(row) : null;
+}
+
 function mapPromptRecipeRow(row: Record<string, unknown>): PromptRecipe {
   return {
     id: String(row.id),
@@ -388,6 +468,14 @@ function mapGenerationLogRow(row: Record<string, unknown>): GenerationLog {
     durationMs: nullableNumber(row.duration_ms),
     promptLength: Number(row.prompt_length),
     hasReferenceImage: Number(row.has_reference_image) === 1,
+    createdAt: String(row.created_at)
+  };
+}
+
+function mapTemplateFavoriteRow(row: Record<string, unknown>): TemplateFavorite {
+  return {
+    userId: String(row.user_id),
+    templateId: String(row.template_id),
     createdAt: String(row.created_at)
   };
 }
