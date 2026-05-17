@@ -34,7 +34,7 @@ const { createServerSupabaseClient } = await import("@/lib/auth/server");
 const { openDatabase } = await import("@/lib/db");
 const { getDailyUsage, listGenerationLogs } = await import("@/lib/db");
 const { createOpenAICompatibleImagesAdapter } = await import("@/lib/providers");
-const { checkDailyQuota } = await import("@/lib/usage");
+const { checkDailyQuota, getUsageDate } = await import("@/lib/usage");
 const { POST } = await import("@/app/api/images/edits/route");
 const actualDb = await vi.importActual<typeof import("@/lib/db")>("@/lib/db");
 const actualUsage = await vi.importActual<typeof import("@/lib/usage")>("@/lib/usage");
@@ -192,7 +192,7 @@ describe("POST /api/images/edits", () => {
     expect(response.status).toBe(429);
     expect(body.error).toBe("quota_exceeded");
     expect(mockCreateAdapter).not.toHaveBeenCalled();
-    expect(getDailyUsage(currentDb, "user-w08", new Date().toISOString().slice(0, 10))).toBe(0);
+    expect(getDailyUsage(currentDb, "user-w08", getUsageDate())).toBe(0);
     const logs = listGenerationLogs(currentDb, "user-w08");
     expect(logs).toHaveLength(1);
     expect(logs[0]).toMatchObject({
@@ -284,7 +284,7 @@ describe("POST /api/images/edits", () => {
     expect(JSON.stringify(logs)).not.toContain("edited-base64-image");
     expect(JSON.stringify(logs)).not.toContain("test-key");
     expect(JSON.stringify(logs)).not.toContain("Bearer");
-    expect(getDailyUsage(currentDb, "user-w08", new Date().toISOString().slice(0, 10))).toBe(1);
+    expect(getDailyUsage(currentDb, "user-w08", getUsageDate())).toBe(1);
   });
 
   it("provider 失败写失败日志，不递增 daily_usage", async () => {
@@ -302,7 +302,7 @@ describe("POST /api/images/edits", () => {
     expect(body.message).not.toContain("sub2api");
     expect(body.message).not.toContain("test-key");
     expect(body.message).not.toContain("Error:");
-    expect(getDailyUsage(currentDb, "user-w08", new Date().toISOString().slice(0, 10))).toBe(0);
+    expect(getDailyUsage(currentDb, "user-w08", getUsageDate())).toBe(0);
     const logs = listGenerationLogs(currentDb, "user-w08");
     expect(logs).toHaveLength(1);
     expect(logs[0]).toMatchObject({
@@ -329,7 +329,7 @@ describe("POST /api/images/edits", () => {
 
     expect(response.status).toBe(502);
     expect(body.error).toBe("provider_response_invalid");
-    expect(getDailyUsage(currentDb, "user-w08", new Date().toISOString().slice(0, 10))).toBe(0);
+    expect(getDailyUsage(currentDb, "user-w08", getUsageDate())).toBe(0);
     const logs = listGenerationLogs(currentDb, "user-w08");
     expect(logs).toHaveLength(1);
     expect(logs[0]).toMatchObject({
