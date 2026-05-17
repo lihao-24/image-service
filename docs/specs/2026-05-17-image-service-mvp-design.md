@@ -50,6 +50,8 @@
 - 图片不写入服务器 cache。
 - 配置不自动保存，用户点击“保存配置”才保存。
 - generation log 自动保存元信息，用于额度、成本和排障。
+- `user_id` 只来自服务端校验后的 Supabase Auth 用户，不接受客户端传入。
+- 每日额度按用户和自然日计算，默认使用服务端本地日期。
 
 ## 用户流程
 
@@ -67,7 +69,9 @@
 用户输入 prompt
   -> 选择 model / size / quality / output_format
   -> 点击生成
+  -> 服务端校验登录用户、参数 allowlist 和每日额度
   -> 服务端调用 /v1/images/generations
+  -> 服务端写入 generation log 和每日用量
   -> 前端展示临时图片
   -> 用户可下载
   -> 用户可点击保存配置
@@ -80,9 +84,11 @@
   -> 输入 prompt
   -> 选择参数
   -> 点击生成
+  -> 服务端校验登录用户、参考图、参数 allowlist 和每日额度
   -> 服务端调用 /v1/images/edits
   -> 服务端优先取 response.data[1].b64_json
   -> 没有 data[1] 时回退 response.data[0].b64_json
+  -> 服务端写入 generation log 和每日用量
   -> 前端展示临时图片
   -> 用户可下载
   -> 用户可点击保存配置
@@ -93,6 +99,7 @@
 ```text
 用户点击“保存配置”
   -> 服务端校验登录用户
+  -> 服务端校验 provider / model / size / quality / output_format 仍在 allowlist 内
   -> 写入 prompt_recipes
   -> 只保存 prompt 和参数
   -> 不保存图片
@@ -120,6 +127,9 @@ IMAGE_DAILY_LIMIT=20
 - 前端不能读取 provider API key。
 - 用户不能直接输入 base URL。
 - 第一版不允许用户自定义 provider。
+- 服务端必须对生成请求和保存配置请求重复校验 provider、model、size、quality、output_format。
+- 客户端只能提交 provider id，不能提交 base URL、apiKeyEnv 或任意 provider 配置。
+- 默认 provider 和默认参数必须存在于服务端 allowlist 中，否则启动或健康检查应报配置错误。
 
 ## 数据策略
 
@@ -141,10 +151,18 @@ Prompt 配方：
 
 生成日志：
 
-- 每次生成自动写入。
+- 每次通过登录校验的生成请求都自动写入。
 - 只保存元信息。
 - 不保存 prompt 全文。
 - 不保存图片。
+- 可保存 prompt 长度、参考图是否存在、错误码、耗时等排障元信息。
+
+每日额度：
+
+- 生成请求在调用 provider 前检查额度。
+- 达到额度时不调用 provider，返回额度错误，并写入 `generation_logs` 的拒绝状态。
+- 只有 provider 成功返回可用图片时递增 `daily_usage.generation_count`。
+- provider 调用失败时写入失败日志，但不递增成功用量。
 
 ## 计划数据模型
 
@@ -179,6 +197,8 @@ generation_logs
   status
   error_code
   duration_ms
+  prompt_length
+  has_reference_image
   created_at
 
 daily_usage
@@ -190,11 +210,12 @@ daily_usage
 ## 安全边界
 
 - 所有生成请求必须在服务端校验登录用户。
+- 登录状态由服务端通过 Supabase Auth session/JWT 校验，`user_id` 从校验结果派生。
 - API key 只存在服务端环境变量中。
 - 用户只能读取和保存自己的配置。
 - generation log 按用户记录。
 - 每日额度按用户计算。
-- 上传的参考图只用于本次请求，不长期保存。
+- 上传的参考图只用于本次请求，不长期保存；第一版只接受常见图片 MIME，例如 `image/png`、`image/jpeg`、`image/webp`，并设置服务端文件大小上限。
 - 错误信息返回给前端前应脱敏，不暴露 provider key、内部 URL 或 stack trace。
 
 ## 部署接入
@@ -223,6 +244,7 @@ https://image.lihao66.top
 - 生成成功不保存图片。
 - 点击保存配置后才写入 prompt_recipes。
 - generation_logs 不保存 prompt 全文。
-- 每日额度生效。
+- 未登录用户不能读写 prompt_recipes、generation_logs 或 daily_usage。
+- 服务端拒绝不在 allowlist 内的 provider、model、size、quality、output_format。
+- 每日额度在 provider 调用前生效，成功生成后递增。
 - 用户 A 不能读取用户 B 的配置。
-

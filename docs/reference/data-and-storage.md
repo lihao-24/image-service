@@ -49,3 +49,10 @@
 
 所有业务数据必须带 `user_id`，并在服务端按当前登录用户过滤。
 
+`user_id` 只能来自服务端校验后的 Supabase Auth 用户，不接受客户端传入。
+
+`prompt_recipes` 可以保存用户主动保存的 prompt 和参数，但不能保存生成图片、参考图文件或 provider API key。
+
+`generation_logs` 不保存 prompt 全文。允许保存 provider、model、mode、size、quality、output_format、status、error_code、duration_ms、prompt_length、has_reference_image、created_at 等元信息。
+
+`daily_usage` 以 `user_id + usage_date` 作为每日额度口径。生成请求应先检查额度；达到额度时不调用 provider，并写入拒绝日志。只有 provider 成功返回可用图片后才递增 `generation_count`，provider 调用失败不递增成功用量。

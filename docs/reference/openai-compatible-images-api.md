@@ -85,11 +85,22 @@ output_formats: png, jpeg, webp
 
 前端只展示服务端返回的 allowlist，不允许用户直接输入 provider base URL。
 
+后端规则：
+
+- 生成接口和保存配置接口都必须重复校验 allowlist。
+- 客户端只能提交 provider id，不能提交 base URL、apiKeyEnv 或 provider 配置对象。
+- provider id 必须存在于服务端配置中，model 必须属于该 provider 的 models。
+- size、quality、output_format 必须来自服务端配置的公开选项。
+
 ## 错误处理
 
 后端应把 provider 错误转换成应用错误：
 
 ```text
+auth_required
+quota_exceeded
+invalid_generation_params
+invalid_reference_image
 provider_request_failed
 provider_response_invalid
 provider_rate_limited
@@ -98,3 +109,8 @@ provider_auth_failed
 
 返回给前端的错误不应包含 API key、完整请求头或内部 stack trace。
 
+参考图上传：
+
+- 第一版只接受常见图片 MIME，例如 `image/png`、`image/jpeg`、`image/webp`。
+- 服务端必须设置文件大小上限。
+- 上传文件只用于本次 `/v1/images/edits` 请求，不落盘长期保存。
