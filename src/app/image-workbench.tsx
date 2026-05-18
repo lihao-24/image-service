@@ -1,31 +1,32 @@
 "use client";
 
-import {
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type ChangeEvent,
-  type ReactNode
-} from "react";
+import { useEffect, useMemo, useSyncExternalStore, useState } from "react";
 import type { PublicImageConfig } from "@/lib/config";
+import { ChatSidebar } from "./workbench/chat-sidebar";
 import {
-  insertRenderedPrompt,
-  renderPromptTemplate,
-  type BuiltinPromptTemplate,
-  type PromptTemplateVariable
-} from "@/lib/prompt-templates";
+  createId,
+  formatUsage,
+  readSafeErrorMessage,
+  SAFE_PROVIDER_ERROR_MESSAGE
+} from "./workbench/helpers";
+import { MessageList } from "./workbench/message-list";
+import { PromptComposer } from "./workbench/prompt-composer";
+import { SaveRecipeModal } from "./workbench/save-recipe-modal";
+import { TemplateModal } from "./workbench/template-modal";
+import type {
+  DailyUsage,
+  GenerationMode,
+  GenerationParamsSnapshot,
+  TemplateLibrary,
+  TemplateModalState,
+  WorkbenchAssistantMessage,
+  WorkbenchMessage,
+  WorkbenchUserMessage
+} from "./workbench/types";
 
-type GenerationMode = "text-to-image" | "image-edit";
-type RequestStatus = "idle" | "loading" | "success" | "error";
-type SaveStatus = "idle" | "saving" | "saved" | "error";
-type TemplateSourceView = "builtin" | "mine" | "favorites";
-type MobilePanel = "templates" | "editor" | "preview";
-
-type TemporaryImage = {
-  src: string;
-  outputFormat: string;
-  filename: string;
+type ImageWorkbenchProps = {
+  config: PublicImageConfig;
+  userLabel: string;
 };
 
 type GenerateResponse = {
@@ -35,170 +36,65 @@ type GenerateResponse = {
   };
   meta?: {
     mode?: GenerationMode;
-    daily_usage?: {
-      generation_count?: number;
-      limit?: number;
-    };
+    daily_usage?: DailyUsage;
   };
   message?: string;
+  error?: string;
 };
 
-type DailyUsage = NonNullable<NonNullable<GenerateResponse["meta"]>["daily_usage"]>;
-
-type TemplateCategory = {
-  id: string;
-  name: string;
-  description?: string;
-};
-
-type ApiRecommendedParams = {
-  model: string;
-  size: string;
-  quality: string;
-  output_format: string;
-  reference_mode?: string | null;
-};
-
-type BuiltinTemplateRecord = {
-  source: "builtin";
-  id: string;
-  title: string;
-  category: string;
-  category_name: string;
-  tags: string[];
-  mode: GenerationMode;
-  recommended: ApiRecommendedParams;
-  prompt: string;
-  variables: PromptTemplateVariable[];
-  source_metadata?: {
-    type: string;
-    name: string;
-    referenceUrl?: string;
-    note: string;
-  };
-  safety_notes?: string[];
-  is_favorite: boolean;
-};
-
-type MineTemplateRecord = {
-  source: "mine";
-  id: string;
-  title: string;
-  category: null;
-  category_name: "我的模板";
-  tags: string[];
-  mode: GenerationMode;
-  provider?: string;
-  model: string;
-  size: string;
-  quality: string;
-  output_format: string;
-  prompt: string;
-  reference_mode: string | null;
-  is_favorite: boolean;
-};
-
-type TemplateRecord = BuiltinTemplateRecord | MineTemplateRecord;
-
-type TemplateLibrary = {
-  categories: TemplateCategory[];
-  templates: {
-    builtin: BuiltinTemplateRecord[];
-    mine: MineTemplateRecord[];
-  };
-  favorite_template_ids: string[];
-};
-
-type ImageWorkbenchProps = {
-  config: PublicImageConfig;
-  userLabel: string;
-};
-
-const SAFE_PROVIDER_ERROR_MESSAGE = "图片生成服务暂时不可用，请稍后再试。";
-const PROVIDER_ERROR_CODES = new Set([
-  "provider_request_failed",
-  "provider_response_invalid",
-  "provider_rate_limited",
-  "provider_auth_failed"
-]);
+type SaveStatus = "idle" | "saving" | "saved" | "error";
 
 export default function ImageWorkbench({ config, userLabel }: ImageWorkbenchProps) {
+  const isMobileViewport = useIsMobileViewport();
   const provider = useMemo(
     () =>
       config.providers.find((item) => item.id === config.defaultProvider) ??
       config.providers[0],
     [config.defaultProvider, config.providers]
   );
+  const providerId = provider?.id ?? config.defaultProvider;
+  const [params, setParams] = useState<GenerationParamsSnapshot>({
+    provider: providerId,
+    model: config.defaults.model,
+    size: config.defaults.size,
+    quality: config.defaults.quality,
+    outputFormat: config.defaults.outputFormat
+  });
   const [mode, setMode] = useState<GenerationMode>("text-to-image");
   const [prompt, setPrompt] = useState("");
-  const [title, setTitle] = useState("");
-  const [model, setModel] = useState(config.defaults.model);
-  const [size, setSize] = useState(config.defaults.size);
-  const [quality, setQuality] = useState(config.defaults.quality);
-  const [outputFormat, setOutputFormat] = useState(config.defaults.outputFormat);
   const [referenceImage, setReferenceImage] = useState<File | null>(null);
-  const [image, setImage] = useState<TemporaryImage | null>(null);
+  const [referencePreviewUrl, setReferencePreviewUrl] = useState("");
+  const [messages, setMessages] = useState<WorkbenchMessage[]>([]);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
+  const [settingsExpanded, setSettingsExpanded] = useState(false);
+  const [templateModal, setTemplateModal] = useState<TemplateModalState>({ open: false });
+  const [library, setLibrary] = useState<TemplateLibrary | null>(null);
   const [usageText, setUsageText] = useState("");
-  const [status, setStatus] = useState<RequestStatus>("idle");
-  const [message, setMessage] = useState("");
+  const [editNotice, setEditNotice] = useState("");
+  const [saveTargetId, setSaveTargetId] = useState<string | null>(null);
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
   const [saveMessage, setSaveMessage] = useState("");
-  const [library, setLibrary] = useState<TemplateLibrary | null>(null);
-  const [libraryStatus, setLibraryStatus] = useState<RequestStatus>("loading");
-  const [libraryMessage, setLibraryMessage] = useState("");
-  const [sourceView, setSourceView] = useState<TemplateSourceView>("builtin");
-  const [mobilePanel, setMobilePanel] = useState<MobilePanel>("editor");
-  const [searchQuery, setSearchQuery] = useState("");
-  const [categoryFilter, setCategoryFilter] = useState("all");
-  const [selectedTemplateId, setSelectedTemplateId] = useState("");
-  const [variableValues, setVariableValues] = useState<Record<string, string>>({});
-  const [templateError, setTemplateError] = useState("");
-  const [templateSuccess, setTemplateSuccess] = useState("");
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const canGenerate = status !== "loading" && prompt.trim().length > 0;
-  const canSave = saveStatus !== "saving" && prompt.trim().length > 0;
-  const providerId = provider?.id ?? config.defaultProvider;
-
-  const allTemplates = useMemo(
-    () => [...(library?.templates.builtin ?? []), ...(library?.templates.mine ?? [])],
-    [library]
-  );
-
-  const selectedTemplate = useMemo(
-    () => allTemplates.find((template) => template.id === selectedTemplateId) ?? null,
-    [allTemplates, selectedTemplateId]
-  );
-
-  const visibleTemplates = useMemo(() => {
-    return allTemplates.filter((template) => {
-      if (sourceView === "builtin" && template.source !== "builtin") {
-        return false;
-      }
-      if (sourceView === "mine" && template.source !== "mine") {
-        return false;
-      }
-      if (sourceView === "favorites" && !template.is_favorite) {
-        return false;
-      }
-      if (
-        categoryFilter !== "all" &&
-        (template.source !== "builtin" || template.category !== categoryFilter)
-      ) {
-        return false;
-      }
-      return matchesTemplateQuery(template, searchQuery);
-    });
-  }, [allTemplates, categoryFilter, searchQuery, sourceView]);
 
   useEffect(() => {
     void loadTemplateLibrary();
   }, []);
 
-  async function loadTemplateLibrary() {
-    setLibraryStatus("loading");
-    setLibraryMessage("");
+  useEffect(() => {
+    return () => {
+      if (referencePreviewUrl) {
+        URL.revokeObjectURL(referencePreviewUrl);
+      }
+    };
+  }, [referencePreviewUrl]);
 
+  const saveTarget = messages.find(
+    (message): message is WorkbenchAssistantMessage =>
+      message.role === "assistant" && message.id === saveTargetId && message.status === "success"
+  );
+
+  async function loadTemplateLibrary() {
     try {
       const response = await fetch("/api/prompt-templates");
       const payload = (await response.json().catch(() => ({}))) as TemplateLibrary & {
@@ -210,191 +106,198 @@ export default function ImageWorkbench({ config, userLabel }: ImageWorkbenchProp
       }
 
       setLibrary(payload);
-      setLibraryStatus("success");
-      setLibraryMessage("");
-    } catch (error) {
-      setLibraryStatus("error");
-      setLibraryMessage(error instanceof Error ? error.message : "提示词库加载失败，请稍后再试。");
+    } catch {
+      setLibrary({
+        categories: [],
+        templates: { builtin: [], mine: [] },
+        favorite_template_ids: []
+      });
     }
   }
 
-  function selectTemplate(template: TemplateRecord) {
-    setSelectedTemplateId(template.id);
-    setTemplateError("");
-    setTemplateSuccess("");
-    setVariableValues(readInitialVariableValues(template));
-    if (template.source === "mine") {
-      setTitle(template.title);
-    }
-    setMobilePanel("editor");
+  function updateParams(nextParams: Partial<GenerationParamsSnapshot>) {
+    setParams((current) => ({ ...current, ...nextParams, provider: providerId }));
   }
 
-  async function toggleBuiltinFavorite(template: BuiltinTemplateRecord) {
-    setTemplateError("");
-    setTemplateSuccess("");
-    const nextFavorite = !template.is_favorite;
-
-    try {
-      const response = await fetch(
-        nextFavorite
-          ? "/api/prompt-templates/favorites"
-          : `/api/prompt-templates/favorites/${encodeURIComponent(template.id)}`,
-        {
-          method: nextFavorite ? "POST" : "DELETE",
-          headers: nextFavorite ? { "Content-Type": "application/json" } : undefined,
-          body: nextFavorite ? JSON.stringify({ template_id: template.id }) : undefined
-        }
-      );
-      const payload = (await response.json().catch(() => ({}))) as { message?: string };
-
-      if (!response.ok) {
-        throw new Error(payload.message || "收藏更新失败，请稍后再试。");
-      }
-
-      setLibrary((current) => updateBuiltinFavorite(current, template.id, nextFavorite));
-      setTemplateSuccess(nextFavorite ? "已加入收藏。" : "已取消收藏。");
-    } catch (error) {
-      setTemplateError(error instanceof Error ? error.message : "收藏更新失败，请稍后再试。");
-    }
+  function useTemplate(payload: {
+    prompt: string;
+    mode: GenerationMode;
+    params: GenerationParamsSnapshot;
+  }) {
+    setPrompt(payload.prompt);
+    updateParams({
+      model: payload.params.model,
+      size: payload.params.size,
+      quality: payload.params.quality,
+      outputFormat: payload.params.outputFormat
+    });
+    setMode(payload.mode);
   }
 
-  function applyTemplate(action: "replace" | "insert") {
-    if (!selectedTemplate) {
-      setTemplateError("请先选择一个模板。");
+  function handleReferenceImageChange(file: File | null) {
+    if (referencePreviewUrl) {
+      URL.revokeObjectURL(referencePreviewUrl);
+      setReferencePreviewUrl("");
+    }
+
+    if (!file) {
+      setReferenceImage(null);
       return;
     }
 
-    const rendered =
-      selectedTemplate.source === "builtin"
-        ? renderSelectedBuiltinTemplate(selectedTemplate, variableValues)
-        : { ok: true as const, prompt: selectedTemplate.prompt };
-
-    if (!rendered.ok) {
-      setTemplateError(rendered.message);
-      setTemplateSuccess("");
+    if (!["image/png", "image/jpeg", "image/webp"].includes(file.type)) {
+      setReferenceImage(null);
+      setEditNotice("参考图仅支持 PNG、JPEG 或 WebP。");
       return;
     }
 
-    const nextPromptResult =
-      action === "replace"
-        ? { ok: true as const, prompt: rendered.prompt }
-        : insertRenderedPrompt(prompt, rendered.prompt);
-
-    if (!nextPromptResult.ok) {
-      setTemplateError(nextPromptResult.message);
-      setTemplateSuccess("");
-      return;
-    }
-
-    setPrompt(nextPromptResult.prompt);
-    applyTemplateParams(selectedTemplate);
-    setTemplateError("");
-    setTemplateSuccess(`已套用：${selectedTemplate.title}`);
-  }
-
-  function applyTemplateParams(template: TemplateRecord) {
-    setMode(template.mode);
-    if (template.source === "builtin") {
-      setModelIfAllowed(template.recommended.model);
-      setSizeIfAllowed(template.recommended.size);
-      setQualityIfAllowed(template.recommended.quality);
-      setOutputFormatIfAllowed(template.recommended.output_format);
-      return;
-    }
-
-    setModelIfAllowed(template.model);
-    setSizeIfAllowed(template.size);
-    setQualityIfAllowed(template.quality);
-    setOutputFormatIfAllowed(template.output_format);
-  }
-
-  function setModelIfAllowed(nextModel: string) {
-    if (provider?.models.includes(nextModel)) {
-      setModel(nextModel);
-    }
-  }
-
-  function setSizeIfAllowed(nextSize: string) {
-    if (config.options.sizes.includes(nextSize)) {
-      setSize(nextSize);
-    }
-  }
-
-  function setQualityIfAllowed(nextQuality: string) {
-    if (config.options.qualities.includes(nextQuality)) {
-      setQuality(nextQuality);
-    }
-  }
-
-  function setOutputFormatIfAllowed(nextFormat: string) {
-    if (config.options.outputFormats.includes(nextFormat)) {
-      setOutputFormat(nextFormat);
-    }
+    setReferenceImage(file);
+    setReferencePreviewUrl(URL.createObjectURL(file));
+    setEditNotice("");
   }
 
   async function handleGenerate() {
-    if (!prompt.trim()) {
-      setStatus("error");
-      setMessage("请输入 prompt。");
+    await startGeneration({
+      prompt: prompt.trim(),
+      mode,
+      params,
+      referenceImage,
+      referencePreviewUrl,
+      referenceFileName: referenceImage?.name,
+      clearComposer: true
+    });
+  }
+
+  async function startGeneration({
+    prompt: promptText,
+    mode: generationMode,
+    params: generationParams,
+    referenceImage: generationReference,
+    referencePreviewUrl: generationReferencePreviewUrl,
+    referenceFileName,
+    clearComposer
+  }: {
+    prompt: string;
+    mode: GenerationMode;
+    params: GenerationParamsSnapshot;
+    referenceImage: File | null;
+    referencePreviewUrl?: string;
+    referenceFileName?: string;
+    clearComposer: boolean;
+  }) {
+    if (!promptText) {
+      setEditNotice("请输入 prompt。");
       return;
     }
 
-    if (mode === "image-edit" && !referenceImage) {
-      setStatus("error");
-      setMessage("请先选择参考图。");
+    if (generationMode === "image-edit" && !generationReference) {
+      setEditNotice("请先选择参考图。");
       return;
     }
 
-    setStatus("loading");
-    setMessage("生成中...");
-    setSaveStatus((current) => (current === "saved" ? "idle" : current));
-    setSaveMessage("");
+    const userMessageId = createId("user");
+    const assistantMessageId = createId("assistant");
+    const createdAt = new Date().toISOString();
+    const userMessage: WorkbenchUserMessage = {
+      id: userMessageId,
+      role: "user",
+      prompt: promptText,
+      mode: generationMode,
+      params: generationParams,
+      referencePreviewUrl: generationReferencePreviewUrl,
+      referenceFileName,
+      collapsed: true,
+      createdAt
+    };
+    const loadingMessage: WorkbenchAssistantMessage = {
+      id: assistantMessageId,
+      role: "assistant",
+      status: "loading",
+      prompt: promptText,
+      mode: generationMode,
+      params: generationParams,
+      createdAt
+    };
+
+    setMessages((current) => [...current, userMessage, loadingMessage]);
+    setIsGenerating(true);
+    setEditNotice("");
+
+    if (clearComposer) {
+      setPrompt("");
+      setReferenceImage(null);
+      setReferencePreviewUrl("");
+    }
 
     try {
-      const response = await fetchGeneration();
-      const payload = (await response.json().catch(() => ({}))) as GenerateResponse & {
-        error?: string;
-      };
+      const response = await fetchGeneration({
+        prompt: promptText,
+        mode: generationMode,
+        params: generationParams,
+        referenceImage: generationReference
+      });
+      const payload = (await response.json().catch(() => ({}))) as GenerateResponse;
 
       if (!response.ok) {
         throw new Error(readSafeErrorMessage(payload.error, payload.message));
       }
 
       const b64Json = payload.image?.b64_json?.trim();
-      const format = payload.image?.output_format || outputFormat;
+      const format = payload.image?.output_format || generationParams.outputFormat;
 
       if (!b64Json) {
         throw new Error(SAFE_PROVIDER_ERROR_MESSAGE);
       }
 
-      const nextImage = {
-        src: `data:image/${format};base64,${b64Json}`,
-        outputFormat: format,
-        filename: `image-service-preview.${format === "jpeg" ? "jpg" : format}`
+      const successMessage: WorkbenchAssistantMessage = {
+        ...loadingMessage,
+        status: "success",
+        image: {
+          src: `data:image/${format};base64,${b64Json}`,
+          outputFormat: format,
+          filename: `image-service-preview.${format === "jpeg" ? "jpg" : format}`
+        }
       };
 
-      setImage(nextImage);
-      setStatus("success");
-      setMessage("生成成功，图片仅保留在当前浏览器页面。");
+      setMessages((current) =>
+        current.map((message) => (message.id === assistantMessageId ? successMessage : message))
+      );
       setUsageText(formatUsage(payload.meta?.daily_usage));
-      setMobilePanel("preview");
     } catch (error) {
-      setStatus("error");
-      setMessage(error instanceof Error ? error.message : SAFE_PROVIDER_ERROR_MESSAGE);
+      const errorMessage: WorkbenchAssistantMessage = {
+        ...loadingMessage,
+        status: "error",
+        errorMessage: error instanceof Error ? error.message : SAFE_PROVIDER_ERROR_MESSAGE
+      };
+      setMessages((current) =>
+        current.map((message) => (message.id === assistantMessageId ? errorMessage : message))
+      );
+    } finally {
+      setIsGenerating(false);
     }
   }
 
-  async function fetchGeneration() {
+  async function fetchGeneration({
+    prompt: promptText,
+    mode: generationMode,
+    params: generationParams,
+    referenceImage: generationReference
+  }: {
+    prompt: string;
+    mode: GenerationMode;
+    params: GenerationParamsSnapshot;
+    referenceImage: File | null;
+  }) {
     const baseFields = {
-      provider: providerId,
-      model,
-      prompt: prompt.trim(),
-      size,
-      quality,
-      output_format: outputFormat
+      provider: generationParams.provider,
+      model: generationParams.model,
+      prompt: promptText,
+      size: generationParams.size,
+      quality: generationParams.quality,
+      output_format: generationParams.outputFormat
     };
 
-    if (mode === "text-to-image") {
+    if (generationMode === "text-to-image") {
       return fetch("/api/images/generations", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -406,8 +309,8 @@ export default function ImageWorkbench({ config, userLabel }: ImageWorkbenchProp
     Object.entries(baseFields).forEach(([key, value]) => {
       formData.set(key, value);
     });
-    if (referenceImage) {
-      formData.set("image", referenceImage);
+    if (generationReference) {
+      formData.set("image", generationReference);
     }
 
     return fetch("/api/images/edits", {
@@ -416,15 +319,43 @@ export default function ImageWorkbench({ config, userLabel }: ImageWorkbenchProp
     });
   }
 
-  async function handleSaveRecipe() {
-    if (!prompt.trim()) {
-      setSaveStatus("error");
-      setSaveMessage("请输入 prompt 后再保存。");
+  function editUserMessage(message: WorkbenchUserMessage) {
+    setPrompt(message.prompt);
+    setMode(message.mode);
+    updateParams(message.params);
+
+    if (message.mode === "image-edit") {
+      setReferenceImage(null);
+      setReferencePreviewUrl("");
+      setEditNotice("参考图需要重新选择。");
+    }
+  }
+
+  function regenerate(assistantMessageId: string) {
+    const assistantMessage = messages.find(
+      (message): message is WorkbenchAssistantMessage =>
+        message.role === "assistant" && message.id === assistantMessageId
+    );
+    if (!assistantMessage || assistantMessage.status !== "success") {
+      return;
+    }
+
+    void startGeneration({
+      prompt: assistantMessage.prompt,
+      mode: assistantMessage.mode,
+      params: assistantMessage.params,
+      referenceImage: null,
+      clearComposer: false
+    });
+  }
+
+  async function saveRecipe(title: string) {
+    if (!saveTarget) {
       return;
     }
 
     setSaveStatus("saving");
-    setSaveMessage("保存中...");
+    setSaveMessage("");
 
     try {
       const response = await fetch("/api/recipes", {
@@ -432,14 +363,14 @@ export default function ImageWorkbench({ config, userLabel }: ImageWorkbenchProp
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           title: title.trim() || "未命名配置",
-          prompt: prompt.trim(),
-          mode,
-          provider: providerId,
-          model,
-          size,
-          quality,
-          output_format: outputFormat,
-          reference_mode: mode === "image-edit" ? "single-image" : null
+          prompt: saveTarget.prompt,
+          mode: saveTarget.mode,
+          provider: saveTarget.params.provider,
+          model: saveTarget.params.model,
+          size: saveTarget.params.size,
+          quality: saveTarget.params.quality,
+          output_format: saveTarget.params.outputFormat,
+          reference_mode: saveTarget.mode === "image-edit" ? "single-image" : null
         })
       });
       const payload = (await response.json().catch(() => ({}))) as { message?: string };
@@ -457,600 +388,168 @@ export default function ImageWorkbench({ config, userLabel }: ImageWorkbenchProp
     }
   }
 
-  function handleReferenceImageChange(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0] ?? null;
-    if (!file) {
-      setReferenceImage(null);
-      return;
-    }
-
-    if (!["image/png", "image/jpeg", "image/webp"].includes(file.type)) {
-      setReferenceImage(null);
-      setStatus("error");
-      setMessage("参考图仅支持 PNG、JPEG 或 WebP。");
-      if (fileInputRef.current) {
-        fileInputRef.current.value = "";
-      }
-      return;
-    }
-
-    setReferenceImage(file);
-    setStatus((current) => (current === "error" ? "idle" : current));
-    setMessage("");
+  function toggleMessageCollapse(messageId: string) {
+    setMessages((current) =>
+      current.map((message) =>
+        message.role === "user" && message.id === messageId
+          ? { ...message, collapsed: !message.collapsed }
+          : message
+      )
+    );
   }
 
   return (
-    <main className="workbench-shell">
-      <header className="workbench-header">
-        <div className="brand-lockup">
-          <span className="brand-mark" aria-hidden="true">
-            IS
-          </span>
-          <div>
-            <p className="eyebrow">image-service</p>
-            <p className="workbench-title">生图工作台</p>
-          </div>
-        </div>
-        <div className="account-bar">
-          {usageText ? <span className="usage-pill">{usageText}</span> : null}
-          <span className="account-email">{userLabel}</span>
-          <form action="/auth/logout" method="post">
-            <button className="secondary-button compact-button" type="submit">
-              退出
-            </button>
-          </form>
-        </div>
-      </header>
+    <main className="flex h-dvh w-screen overflow-hidden bg-white text-slate-950">
+      {sidebarOpen ? (
+        <ChatSidebar
+          className="hidden h-full w-[280px] shrink-0 flex-col bg-slate-950 px-4 py-4 text-slate-100 shadow-2xl md:flex"
+          categories={library?.categories ?? []}
+          config={config}
+          onOpenTemplates={setTemplateModal}
+          onParamChange={updateParams}
+          onSettingsExpandedChange={setSettingsExpanded}
+          params={params}
+          provider={provider}
+          settingsExpanded={settingsExpanded}
+          usageText={usageText}
+          userLabel={userLabel}
+        />
+      ) : null}
 
-      <nav
-        aria-label="移动端工作台分区"
-        className="mobile-only-panel-switch"
-        role="tablist"
-      >
-        {[
-          ["templates", "模板"],
-          ["editor", "编辑"],
-          ["preview", "预览"]
-        ].map(([panel, label]) => (
+      {isMobileViewport && mobileDrawerOpen ? (
+        <div className="fixed inset-0 z-40 md:hidden">
           <button
-            aria-controls={`${panel}-panel`}
-            aria-selected={mobilePanel === panel}
-            className={mobilePanel === panel ? "is-active" : ""}
-            id={`${panel}-tab`}
-            key={panel}
-            onClick={() => setMobilePanel(panel as MobilePanel)}
-            role="tab"
+            aria-label="关闭侧边栏遮罩"
+            className="absolute inset-0 bg-slate-950/45"
+            onClick={() => setMobileDrawerOpen(false)}
+            type="button"
+          />
+          <ChatSidebar
+            className="relative z-10 flex h-full w-[min(84vw,320px)] flex-col bg-slate-950 px-4 py-4 text-slate-100 shadow-2xl"
+            categories={library?.categories ?? []}
+            config={config}
+            onClose={() => setMobileDrawerOpen(false)}
+            onOpenTemplates={(state) => {
+              setTemplateModal(state);
+              setMobileDrawerOpen(false);
+            }}
+            onParamChange={updateParams}
+            onSettingsExpandedChange={setSettingsExpanded}
+            params={params}
+            provider={provider}
+            settingsExpanded={settingsExpanded}
+            usageText={usageText}
+            userLabel={userLabel}
+          />
+        </div>
+      ) : null}
+
+      <section className="flex min-w-0 flex-1 flex-col bg-white">
+        <header className="flex min-h-16 items-center justify-between border-b border-slate-200 px-4">
+          <div className="flex items-center gap-3">
+            <button
+              className="min-h-11 rounded-lg px-3 font-semibold text-slate-700 hover:bg-slate-100"
+              onClick={() => {
+                if (isMobileViewport) {
+                  setMobileDrawerOpen((current) => !current);
+                  return;
+                }
+                setSidebarOpen((current) => !current);
+              }}
+              type="button"
+            >
+              {isMobileViewport
+                ? mobileDrawerOpen
+                  ? "隐藏侧边栏"
+                  : "显示侧边栏"
+                : sidebarOpen
+                  ? "隐藏侧边栏"
+                  : "显示侧边栏"}
+            </button>
+            <span className="text-sm font-bold text-slate-950">chat</span>
+          </div>
+          <button
+            className="min-h-11 rounded-lg px-3 text-sm font-semibold text-slate-500 hover:bg-slate-100"
             type="button"
           >
-            {label}
+            更多
           </button>
-        ))}
-      </nav>
+        </header>
 
-      <div className="workbench-layout">
-        <section
-          aria-label="提示词库"
-          aria-labelledby="templates-tab"
-          className={mobilePanel === "templates" ? "template-panel is-mobile-active" : "template-panel"}
-          id="templates-panel"
-        >
-          <div className="template-panel-top">
-            <SectionHeader title="提示词库" meta={`${visibleTemplates.length} 个模板`} />
-          </div>
-
-          <div className="template-panel-body">
-            <div className="source-switch" role="group" aria-label="模板来源">
-              {[
-                ["builtin", "内置模板"],
-                ["mine", "我的模板"],
-                ["favorites", "收藏"]
-              ].map(([source, label]) => (
-                <button
-                  aria-pressed={sourceView === source}
-                  className={sourceView === source ? "is-active" : ""}
-                  key={source}
-                  onClick={() => setSourceView(source as TemplateSourceView)}
-                  type="button"
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-
-            <label className="field compact-field search-field">
-              <span>搜索模板</span>
-              <input
-                onChange={(event) => setSearchQuery(event.target.value)}
-                placeholder="搜索标题、标签或 prompt"
-                value={searchQuery}
-              />
-            </label>
-
-            <div className="category-filter" aria-label="分类筛选" role="group">
-              <button
-                aria-pressed={categoryFilter === "all"}
-                className={categoryFilter === "all" ? "is-active" : ""}
-                disabled={sourceView === "mine"}
-                onClick={() => setCategoryFilter("all")}
-                type="button"
-              >
-                全部分类
-              </button>
-              {library?.categories.map((category) => (
-                <button
-                  aria-pressed={categoryFilter === category.id}
-                  className={categoryFilter === category.id ? "is-active" : ""}
-                  disabled={sourceView === "mine"}
-                  key={category.id}
-                  onClick={() => setCategoryFilter(category.id)}
-                  type="button"
-                >
-                  {category.name}
-                </button>
-              ))}
-            </div>
-
-            {libraryStatus === "loading" ? <p className="empty-state">提示词库加载中...</p> : null}
-            {libraryStatus === "error" ? (
-              <p className="status-message error">{libraryMessage}</p>
-            ) : null}
-            {libraryStatus === "success" && visibleTemplates.length === 0 ? (
-              <p className="empty-state">暂无匹配模板，请调整搜索或筛选。</p>
-            ) : null}
-
-            <ul className="template-list" aria-label="模板列表">
-              {visibleTemplates.map((template) => (
-                <li className="template-item" key={template.id}>
-                  <button
-                    aria-label={`选择模板 ${template.title}`}
-                    className={
-                      selectedTemplateId === template.id
-                        ? "template-select is-selected"
-                        : "template-select"
-                    }
-                    onClick={() => selectTemplate(template)}
-                    type="button"
-                  >
-                    <span className="template-title">{template.title}</span>
-                    <span className="template-meta">
-                      {template.category_name} ·{" "}
-                      {template.mode === "image-edit" ? "参考图" : "文生图"}
-                    </span>
-                    <span className="template-tags">{template.tags.slice(0, 3).join(" / ")}</span>
-                  </button>
-                  {template.source === "builtin" ? (
-                    <button
-                      aria-label={`${template.is_favorite ? "取消收藏" : "收藏"} ${template.title}`}
-                      className={
-                        template.is_favorite ? "favorite-button is-favorite" : "favorite-button"
-                      }
-                      onClick={() => void toggleBuiltinFavorite(template)}
-                      type="button"
-                    >
-                      {template.is_favorite ? "已收藏" : "收藏"}
-                    </button>
-                  ) : (
-                    <span className="mine-badge">{template.is_favorite ? "收藏" : "我的"}</span>
-                  )}
-                </li>
-              ))}
-            </ul>
-          </div>
-        </section>
-
-        <section
-          aria-label="Prompt 编辑和参数"
-          aria-labelledby="editor-tab"
-          className={mobilePanel === "editor" ? "control-panel is-mobile-active" : "control-panel"}
-          id="editor-panel"
-        >
-          <SectionHeader
-            title="编辑"
-            meta={selectedTemplate ? `已选择：${selectedTemplate.title}` : "未选择模板"}
+        <div className="min-h-0 flex-1 overflow-y-auto bg-white">
+          <MessageList
+            messages={messages}
+            onEditUserMessage={editUserMessage}
+            onOpenTemplateCategory={(categoryId, title) =>
+              setTemplateModal({ open: true, source: "category", categoryId, title })
+            }
+            onRegenerate={regenerate}
+            onSaveRecipe={(messageId) => {
+              setSaveTargetId(messageId);
+              setSaveStatus("idle");
+              setSaveMessage("");
+            }}
+            onToggleCollapse={toggleMessageCollapse}
           />
+        </div>
 
-          <div className="mode-switch" role="radiogroup" aria-label="生成模式">
-            <label>
-              <input
-                checked={mode === "text-to-image"}
-                name="generation-mode"
-                onChange={() => setMode("text-to-image")}
-                type="radio"
-              />
-              文生图
-            </label>
-            <label>
-              <input
-                checked={mode === "image-edit"}
-                name="generation-mode"
-                onChange={() => setMode("image-edit")}
-                type="radio"
-              />
-              参考图
-            </label>
-          </div>
+        {editNotice ? (
+          <p className="mx-auto mb-2 w-full max-w-4xl px-4 text-sm font-semibold text-amber-700">
+            {editNotice}
+          </p>
+        ) : null}
 
-          <label className="field prompt-field" data-testid="prompt-field">
-            <span>Prompt</span>
-            <textarea
-              aria-label="Prompt"
-              maxLength={4000}
-              onChange={(event) => setPrompt(event.target.value)}
-              rows={9}
-              value={prompt}
-            />
-            <span className="field-hint prompt-counter">{prompt.length}/4000 字</span>
-          </label>
+        <PromptComposer
+          generating={isGenerating}
+          mode={mode}
+          onModeChange={setMode}
+          onPromptChange={setPrompt}
+          onReferenceImageChange={handleReferenceImageChange}
+          onSubmit={handleGenerate}
+          prompt={prompt}
+          referenceImage={referenceImage}
+          referencePreviewUrl={referencePreviewUrl}
+        />
+      </section>
 
-          <div className="template-detail" aria-label="模板变量">
-            <div className="template-detail-head">
-              <h2>模板变量</h2>
-              <span>{selectedTemplate ? selectedTemplate.title : "先从左侧选择模板"}</span>
-            </div>
-            {selectedTemplate ? (
-              <>
-                <p className="template-prompt-preview">{selectedTemplate.prompt}</p>
-                {selectedTemplate.source === "builtin" && selectedTemplate.variables.length > 0 ? (
-                  <div className="variable-grid">
-                    {selectedTemplate.variables.map((variable) => (
-                      <label className="field compact-field" key={variable.key}>
-                        <span>
-                          {variable.label}
-                          {variable.required ? " *" : ""}
-                        </span>
-                        <input
-                          aria-label={variable.label}
-                          maxLength={variable.maxLength}
-                          onChange={(event) =>
-                            setVariableValues((current) => ({
-                              ...current,
-                              [variable.key]: event.target.value
-                            }))
-                          }
-                          placeholder={variable.placeholder}
-                          value={variableValues[variable.key] ?? ""}
-                        />
-                        {variable.helperText ? (
-                          <span className="field-hint">{variable.helperText}</span>
-                        ) : null}
-                      </label>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="empty-state compact-empty">我的模板会直接套用保存时的 prompt。</p>
-                )}
-                <div className="template-actions">
-                  <button
-                    className="secondary-button"
-                    onClick={() => applyTemplate("replace")}
-                    type="button"
-                  >
-                    替换当前 prompt
-                  </button>
-                  <button
-                    className="secondary-button"
-                    onClick={() => applyTemplate("insert")}
-                    type="button"
-                  >
-                    插入到当前 prompt
-                  </button>
-                </div>
-              </>
-            ) : (
-              <p className="empty-state compact-empty">
-                点击模板只会填入 prompt 和推荐参数，不会生成图片或保存配置。
-              </p>
-            )}
-            {templateError ? <p className="status-message error">{templateError}</p> : null}
-            {templateSuccess ? <p className="status-message saved">{templateSuccess}</p> : null}
-          </div>
+      <TemplateModal
+        currentParams={params}
+        library={library}
+        modal={templateModal}
+        onClose={() => setTemplateModal({ open: false })}
+        onUseTemplate={useTemplate}
+      />
 
-          {mode === "image-edit" ? (
-            <label className="field">
-              <span>参考图文件</span>
-              <input
-                aria-label="参考图文件"
-                accept="image/png,image/jpeg,image/webp"
-                onChange={handleReferenceImageChange}
-                ref={fileInputRef}
-                type="file"
-              />
-              {referenceImage ? (
-                <span className="field-hint">{referenceImage.name}</span>
-              ) : (
-                <span className="field-hint">参考图只在本次请求中使用，不会持久化保存。</span>
-              )}
-            </label>
-          ) : null}
-
-          <div className="parameter-grid">
-            <label className="field">
-              <span>Model</span>
-              <select onChange={(event) => setModel(event.target.value)} value={model}>
-                {provider?.models.map((item) => (
-                  <option key={item} value={item}>
-                    {item}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <label className="field">
-              <span>尺寸</span>
-              <select onChange={(event) => setSize(event.target.value)} value={size}>
-                {config.options.sizes.map((item) => (
-                  <option key={item} value={item}>
-                    {item}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <label className="field">
-              <span>质量</span>
-              <select onChange={(event) => setQuality(event.target.value)} value={quality}>
-                {config.options.qualities.map((item) => (
-                  <option key={item} value={item}>
-                    {item}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <label className="field">
-              <span>输出格式</span>
-              <select
-                onChange={(event) => setOutputFormat(event.target.value)}
-                value={outputFormat}
-              >
-                {config.options.outputFormats.map((item) => (
-                  <option key={item} value={item}>
-                    {item}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
-
-          <label className="field">
-            <span>配置名称</span>
-            <input
-              maxLength={120}
-              onChange={(event) => setTitle(event.target.value)}
-              value={title}
-            />
-          </label>
-
-          <div className="action-row">
-            <button
-              className="primary-button"
-              disabled={!canGenerate}
-              onClick={handleGenerate}
-              type="button"
-            >
-              {status === "loading" ? "生成中..." : "生成图片"}
-            </button>
-            <button
-              className="secondary-button"
-              disabled={!canSave}
-              onClick={handleSaveRecipe}
-              type="button"
-            >
-              {saveStatus === "saving" ? "保存中..." : "保存配置"}
-            </button>
-          </div>
-
-          {message ? (
-            <p className={status === "error" ? "status-message error" : "status-message"}>
-              {message}
-            </p>
-          ) : null}
-          {saveMessage ? (
-            <p
-              className={
-                saveStatus === "error" ? "status-message error" : "status-message saved"
-              }
-            >
-              {saveMessage}
-            </p>
-          ) : null}
-        </section>
-
-        <section
-          aria-label="临时预览"
-          aria-labelledby="preview-tab"
-          className={mobilePanel === "preview" ? "preview-panel is-mobile-active" : "preview-panel"}
-          id="preview-panel"
-        >
-          <SectionHeader title="预览" meta={usageText || "今日用量将在生成后显示"} />
-          <div className="preview-viewport" role="region" aria-label="预览画布">
-            {image ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img alt="当前生成图片预览" className="preview-image" src={image.src} />
-            ) : (
-              <div className="empty-preview">
-                <svg
-                  aria-label="等待生成图标"
-                  fill="none"
-                  height="44"
-                  role="img"
-                  viewBox="0 0 44 44"
-                  width="44"
-                  xmlns="http://www.w3.org/2000/svg"
-                >
-                  <rect
-                    height="30"
-                    rx="8"
-                    stroke="currentColor"
-                    strokeWidth="1.6"
-                    width="30"
-                    x="7"
-                    y="7"
-                  />
-                  <path
-                    d="M14 28l5.5-6 4.4 4.2 2.8-3.1L31 28"
-                    stroke="currentColor"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth="1.6"
-                  />
-                  <circle cx="27.5" cy="16.5" r="2.4" fill="currentColor" />
-                </svg>
-                <span>等待生成</span>
-              </div>
-            )}
-          </div>
-          <div className="preview-footer">
-            <span>图片只在当前页面临时展示，不会写入模板、日志或浏览器存储。</span>
-            <a
-              aria-disabled={!image}
-              className={image ? "download-link" : "download-link disabled"}
-              download={image?.filename}
-              href={image?.src ?? "#"}
-              onClick={(event) => {
-                if (!image) {
-                  event.preventDefault();
-                }
-              }}
-            >
-              下载图片
-            </a>
-          </div>
-        </section>
-      </div>
+      <SaveRecipeModal
+        key={saveTarget?.id ?? "save-recipe-modal"}
+        message={saveMessage}
+        onClose={() => setSaveTargetId(null)}
+        onSave={(title) => void saveRecipe(title)}
+        open={Boolean(saveTarget)}
+        prompt={saveTarget?.prompt ?? ""}
+        saving={saveStatus === "saving"}
+      />
     </main>
   );
 }
 
-function SectionHeader({ title, meta }: { title: string; meta: ReactNode }) {
-  return (
-    <div className="section-header">
-      <h2>{title}</h2>
-      <span>{meta}</span>
-    </div>
-  );
+function useIsMobileViewport() {
+  return useSyncExternalStore(subscribeViewport, readIsMobileViewport, () => false);
 }
 
-function renderSelectedBuiltinTemplate(
-  template: BuiltinTemplateRecord,
-  values: Record<string, string>
-) {
-  return renderPromptTemplate(
-    {
-      id: template.id,
-      title: template.title,
-      category: template.category,
-      tags: template.tags,
-      mode: template.mode,
-      recommended: {
-        model: "gpt-image-2",
-        size: template.recommended.size,
-        quality: template.recommended.quality,
-        outputFormat: template.recommended.output_format,
-        referenceMode:
-          template.recommended.reference_mode === "single-image" ? "single-image" : "none"
-      },
-      prompt: template.prompt,
-      variables: template.variables,
-      source: {
-        type: "external-inspired",
-        name: template.source_metadata?.name ?? "image-service",
-        referenceUrl: template.source_metadata?.referenceUrl,
-        note: template.source_metadata?.note ?? "内置中文模板。"
-      },
-      safetyNotes: template.safety_notes
-    } as BuiltinPromptTemplate,
-    values
-  );
+function subscribeViewport(onStoreChange: () => void) {
+  if (typeof window === "undefined") {
+    return () => {};
+  }
+
+  window.addEventListener("resize", onStoreChange);
+  return () => window.removeEventListener("resize", onStoreChange);
 }
 
-function readInitialVariableValues(template: TemplateRecord) {
-  if (template.source === "mine") {
-    return {};
+function readIsMobileViewport() {
+  if (typeof window === "undefined") {
+    return false;
   }
 
-  return Object.fromEntries(
-    template.variables.map((variable) => [variable.key, variable.defaultValue ?? ""])
-  );
-}
-
-function updateBuiltinFavorite(
-  library: TemplateLibrary | null,
-  templateId: string,
-  isFavorite: boolean
-): TemplateLibrary | null {
-  if (!library) {
-    return library;
-  }
-
-  const favoriteSet = new Set(library.favorite_template_ids);
-  if (isFavorite) {
-    favoriteSet.add(templateId);
-  } else {
-    favoriteSet.delete(templateId);
-  }
-
-  return {
-    ...library,
-    favorite_template_ids: Array.from(favoriteSet),
-    templates: {
-      ...library.templates,
-      builtin: library.templates.builtin.map((template) =>
-        template.id === templateId ? { ...template, is_favorite: isFavorite } : template
-      )
-    }
-  };
-}
-
-function matchesTemplateQuery(template: TemplateRecord, query: string) {
-  const normalizedQuery = query.trim().toLocaleLowerCase("zh-CN");
-  if (!normalizedQuery) {
-    return true;
-  }
-
-  const values = [
-    template.title,
-    template.category_name,
-    template.mode,
-    ...template.tags,
-    template.prompt
-  ];
-
-  if (template.source === "builtin") {
-    for (const variable of template.variables) {
-      values.push(variable.key, variable.label, variable.placeholder);
-    }
-  }
-
-  return values.join("\n").toLocaleLowerCase("zh-CN").includes(normalizedQuery);
-}
-
-function formatUsage(usage?: DailyUsage): string {
-  if (!usage?.generation_count || !usage.limit) {
-    return "";
-  }
-
-  return `今日用量 ${usage.generation_count}/${usage.limit}`;
-}
-
-function readSafeErrorMessage(errorCode?: string, message?: string): string {
-  if (errorCode && PROVIDER_ERROR_CODES.has(errorCode)) {
-    return SAFE_PROVIDER_ERROR_MESSAGE;
-  }
-
-  if (!message) {
-    return "请求失败，请稍后再试。";
-  }
-
-  if (containsSensitiveDetails(message)) {
-    return SAFE_PROVIDER_ERROR_MESSAGE;
-  }
-
-  return message;
-}
-
-function containsSensitiveDetails(message: string): boolean {
-  return /(https?:\/\/|api[_-]?key|sk-[a-z0-9_-]+|stack trace|baseUrl|apiKeyEnv)/i.test(
-    message
-  );
+  return window.innerWidth < 768;
 }
