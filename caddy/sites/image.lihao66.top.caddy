@@ -1,0 +1,3 @@
+image.lihao66.top {
+    reverse_proxy 100.78.150.78:3010
+}
