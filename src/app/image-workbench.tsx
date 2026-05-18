@@ -9,6 +9,7 @@ import {
   readSafeErrorMessage,
   SAFE_PROVIDER_ERROR_MESSAGE
 } from "./workbench/helpers";
+import { MoreIcon, PanelIcon } from "./workbench/icons";
 import { MessageList } from "./workbench/message-list";
 import { PromptComposer } from "./workbench/prompt-composer";
 import { SaveRecipeModal } from "./workbench/save-recipe-modal";
@@ -429,6 +430,7 @@ export default function ImageWorkbench({ config, userLabel }: ImageWorkbenchProp
           className="hidden h-full w-[280px] shrink-0 flex-col bg-slate-950 px-4 py-4 text-slate-100 shadow-2xl md:flex"
           categories={library?.categories ?? []}
           config={config}
+          mineTemplates={library?.templates.mine ?? []}
           onOpenTemplates={setTemplateModal}
           onParamChange={updateParams}
           onSettingsExpandedChange={setSettingsExpanded}
@@ -452,6 +454,7 @@ export default function ImageWorkbench({ config, userLabel }: ImageWorkbenchProp
             className="relative z-10 flex h-full w-[min(84vw,320px)] flex-col bg-slate-950 px-4 py-4 text-slate-100 shadow-2xl"
             categories={library?.categories ?? []}
             config={config}
+            mineTemplates={library?.templates.mine ?? []}
             onClose={() => setMobileDrawerOpen(false)}
             onOpenTemplates={(state) => {
               setTemplateModal(state);
@@ -472,7 +475,16 @@ export default function ImageWorkbench({ config, userLabel }: ImageWorkbenchProp
         <header className="flex min-h-16 items-center justify-between border-b border-slate-200 px-4">
           <div className="flex items-center gap-3">
             <button
-              className="min-h-11 rounded-lg px-3 font-semibold text-slate-700 hover:bg-slate-100"
+              aria-label={
+                isMobileViewport
+                  ? mobileDrawerOpen
+                    ? "隐藏侧边栏"
+                    : "显示侧边栏"
+                  : sidebarOpen
+                    ? "隐藏侧边栏"
+                    : "显示侧边栏"
+              }
+              className="grid h-11 w-11 place-items-center rounded-lg text-slate-700 hover:bg-slate-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-600"
               onClick={() => {
                 if (isMobileViewport) {
                   setMobileDrawerOpen((current) => !current);
@@ -482,21 +494,16 @@ export default function ImageWorkbench({ config, userLabel }: ImageWorkbenchProp
               }}
               type="button"
             >
-              {isMobileViewport
-                ? mobileDrawerOpen
-                  ? "隐藏侧边栏"
-                  : "显示侧边栏"
-                : sidebarOpen
-                  ? "隐藏侧边栏"
-                  : "显示侧边栏"}
+              <PanelIcon />
             </button>
             <span className="text-sm font-bold text-slate-950">chat</span>
           </div>
           <button
-            className="min-h-11 rounded-lg px-3 text-sm font-semibold text-slate-500 hover:bg-slate-100"
+            aria-label="更多"
+            className="grid h-11 w-11 place-items-center rounded-lg text-slate-500 hover:bg-slate-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-600"
             type="button"
           >
-            更多
+            <MoreIcon />
           </button>
         </header>
 

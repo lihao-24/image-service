@@ -1,4 +1,13 @@
 import { parseAspectRatio } from "./helpers";
+import {
+  CollapseIcon,
+  CopyIcon,
+  DownloadIcon,
+  EditIcon,
+  ExpandIcon,
+  RefreshIcon,
+  SaveIcon
+} from "./icons";
 import type { WorkbenchMessage, WorkbenchUserMessage } from "./types";
 
 type MessageListProps = {
@@ -107,19 +116,30 @@ function UserMessage({
         </div>
         <div className="flex flex-wrap gap-2">
           {isLong ? (
-            <button className="text-sm font-semibold text-indigo-200" onClick={onToggle} type="button">
-              {message.collapsed ? "展开" : "收起"}
+            <button
+              aria-label={message.collapsed ? "展开" : "收起"}
+              className="grid h-10 w-10 place-items-center rounded-lg text-indigo-200 hover:bg-white/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-200"
+              onClick={onToggle}
+              type="button"
+            >
+              {message.collapsed ? <ExpandIcon className="h-4 w-4" /> : <CollapseIcon className="h-4 w-4" />}
             </button>
           ) : null}
-          <button className="text-sm font-semibold text-indigo-200" onClick={onEdit} type="button">
-            编辑用户消息
+          <button
+            aria-label="编辑用户消息"
+            className="grid h-10 w-10 place-items-center rounded-lg text-indigo-200 hover:bg-white/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-200"
+            onClick={onEdit}
+            type="button"
+          >
+            <EditIcon className="h-4 w-4" />
           </button>
           <button
-            className="text-sm font-semibold text-indigo-200"
+            aria-label="复制 Prompt"
+            className="grid h-10 w-10 place-items-center rounded-lg text-indigo-200 hover:bg-white/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-200"
             onClick={() => void navigator.clipboard?.writeText(message.prompt)}
             type="button"
           >
-            复制 Prompt
+            <CopyIcon className="h-4 w-4" />
           </button>
         </div>
       </div>
@@ -171,32 +191,36 @@ function AssistantMessage({
       </div>
       <div className="mt-3 flex flex-wrap gap-2">
         <a
-          className="inline-flex min-h-11 items-center rounded-lg border border-slate-200 px-3 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+          aria-label="下载"
+          className="grid h-11 w-11 place-items-center rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-600"
           download={message.image?.filename}
           href={message.image?.src ?? "#"}
         >
-          下载
+          <DownloadIcon />
         </a>
         <button
-          className="min-h-11 rounded-lg border border-slate-200 px-3 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+          aria-label="重新生成"
+          className="grid h-11 w-11 place-items-center rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-600"
           onClick={onRegenerate}
           type="button"
         >
-          重新生成
+          <RefreshIcon />
         </button>
         <button
-          className="min-h-11 rounded-lg border border-slate-200 px-3 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+          aria-label="复制 Prompt"
+          className="grid h-11 w-11 place-items-center rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-600"
           onClick={() => void navigator.clipboard?.writeText(message.prompt)}
           type="button"
         >
-          复制 Prompt
+          <CopyIcon />
         </button>
         <button
-          className="min-h-11 rounded-lg bg-slate-950 px-3 text-sm font-semibold text-white hover:bg-slate-800"
+          aria-label="保存配置"
+          className="grid h-11 w-11 place-items-center rounded-lg bg-slate-950 text-white hover:bg-slate-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-600"
           onClick={onSaveRecipe}
           type="button"
         >
-          保存配置
+          <SaveIcon />
         </button>
       </div>
     </article>

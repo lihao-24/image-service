@@ -1,6 +1,13 @@
+import { useState } from "react";
 import type { PublicImageConfig, PublicProviderConfig } from "@/lib/config";
-import type { GenerationParamsSnapshot, TemplateCategory, TemplateModalState } from "./types";
+import type {
+  GenerationParamsSnapshot,
+  MineTemplateRecord,
+  TemplateCategory,
+  TemplateModalState
+} from "./types";
 import { usagePercent } from "./helpers";
+import { XIcon } from "./icons";
 
 type ChatSidebarProps = {
   className?: string;
@@ -13,9 +20,12 @@ type ChatSidebarProps = {
   onSettingsExpandedChange: (expanded: boolean) => void;
   onParamChange: (params: Partial<GenerationParamsSnapshot>) => void;
   categories: TemplateCategory[];
+  mineTemplates: MineTemplateRecord[];
   onOpenTemplates: (state: Extract<TemplateModalState, { open: true }>) => void;
   onClose?: () => void;
 };
+
+type TemplateListView = "default" | "mine";
 
 export function ChatSidebar({
   className = "flex h-full w-[280px] shrink-0 flex-col bg-slate-950 px-4 py-4 text-slate-100 shadow-2xl",
@@ -28,9 +38,12 @@ export function ChatSidebar({
   onSettingsExpandedChange,
   onParamChange,
   categories,
+  mineTemplates,
   onOpenTemplates,
   onClose
 }: ChatSidebarProps) {
+  const [templateListView, setTemplateListView] = useState<TemplateListView>("default");
+
   return (
     <aside
       aria-label="工作台侧边栏"
@@ -49,11 +62,11 @@ export function ChatSidebar({
         {onClose ? (
           <button
             aria-label="关闭侧边栏面板"
-            className="min-h-11 rounded-lg px-3 text-sm font-semibold text-slate-300 hover:bg-white/10"
+            className="grid h-11 w-11 shrink-0 place-items-center rounded-lg text-slate-300 hover:bg-white/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300"
             onClick={onClose}
             type="button"
           >
-            关闭侧边栏
+            <XIcon />
           </button>
         ) : null}
       </div>
@@ -143,51 +156,94 @@ export function ChatSidebar({
         </div>
       </section>
 
-      <section className="mt-5 min-h-0 flex-1">
+      <section className="mt-5 flex min-h-0 flex-1 flex-col">
         <h2 className="mb-3 text-sm font-semibold text-slate-300">模板</h2>
-        <div className="grid gap-2">
+        <div className="mb-3 grid grid-cols-2 gap-2">
           <button
-            className="min-h-11 rounded-lg bg-white/10 px-3 text-left text-sm font-semibold text-white hover:bg-white/15"
-            onClick={() => onOpenTemplates({ open: true, source: "favorites", title: "收藏模板" })}
+            aria-pressed={templateListView === "default"}
+            className={`min-h-11 rounded-lg px-3 text-sm font-semibold ${
+              templateListView === "default"
+                ? "bg-white text-slate-950"
+                : "bg-white/10 text-slate-300 hover:bg-white/15 hover:text-white"
+            }`}
+            onClick={() => setTemplateListView("default")}
             type="button"
           >
-            收藏
+            默认
           </button>
           <button
-            className="min-h-11 rounded-lg bg-white/10 px-3 text-left text-sm font-semibold text-white hover:bg-white/15"
-            onClick={() => onOpenTemplates({ open: true, source: "mine", title: "我的模板" })}
+            aria-pressed={templateListView === "mine"}
+            className={`min-h-11 rounded-lg px-3 text-sm font-semibold ${
+              templateListView === "mine"
+                ? "bg-white text-slate-950"
+                : "bg-white/10 text-slate-300 hover:bg-white/15 hover:text-white"
+            }`}
+            onClick={() => setTemplateListView("mine")}
             type="button"
           >
-            我的模板
+            我的
           </button>
-          <div className="my-1 h-px bg-white/10" />
-          {categories.map((category) => (
-            <button
-              aria-label={`打开模板分类 ${category.name}`}
-              className="min-h-11 rounded-lg px-3 text-left text-sm font-semibold text-slate-300 hover:bg-white/10 hover:text-white"
-              key={category.id}
-              onClick={() =>
-                onOpenTemplates({
-                  open: true,
-                  source: "category",
-                  title: `${category.name}模板`,
-                  categoryId: category.id
-                })
-              }
-              type="button"
-            >
-              <span className="block">{category.name}</span>
-              {category.description ? (
-                <span className="block truncate text-xs font-normal text-slate-500">
-                  {category.description}
-                </span>
+        </div>
+        <div className="min-h-0 overflow-y-auto pr-1">
+          {templateListView === "default" ? (
+            <div className="grid gap-2">
+              {categories.map((category) => (
+                <button
+                  aria-label={`打开模板分类 ${category.name}`}
+                  className="min-h-11 rounded-lg px-3 py-2 text-left text-sm font-semibold text-slate-300 hover:bg-white/10 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300"
+                  key={category.id}
+                  onClick={() =>
+                    onOpenTemplates({
+                      open: true,
+                      source: "category",
+                      title: `${category.name}模板`,
+                      categoryId: category.id
+                    })
+                  }
+                  type="button"
+                >
+                  <span className="block">{category.name}</span>
+                  {category.description ? (
+                    <span className="block truncate text-xs font-normal text-slate-500">
+                      {category.description}
+                    </span>
+                  ) : null}
+                </button>
+              ))}
+            </div>
+          ) : (
+            <div className="grid gap-2">
+              {mineTemplates.length === 0 ? (
+                <p className="m-0 rounded-lg bg-white/5 px-3 py-4 text-sm text-slate-400">
+                  暂无我的模板
+                </p>
               ) : null}
-            </button>
-          ))}
+              {mineTemplates.map((template) => (
+                <button
+                  aria-label={`打开我的模板 ${template.title}`}
+                  className="min-h-11 rounded-lg px-3 py-2 text-left text-sm font-semibold text-slate-300 hover:bg-white/10 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300"
+                  key={template.id}
+                  onClick={() =>
+                    onOpenTemplates({
+                      open: true,
+                      source: "mine",
+                      title: "我的模板"
+                    })
+                  }
+                  type="button"
+                >
+                  <span className="block truncate">{template.title}</span>
+                  <span className="block truncate text-xs font-normal text-slate-500">
+                    {template.size} · {template.quality}
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       </section>
 
-      <section className="mt-5 border-t border-white/10 pt-4">
+      <section className="mt-5 shrink-0 border-t border-white/10 pt-4">
         <p className="m-0 truncate text-sm font-semibold text-white">{userLabel}</p>
         <div className="mt-3 h-2 overflow-hidden rounded-full bg-white/10">
           <div

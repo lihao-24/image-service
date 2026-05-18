@@ -1,4 +1,5 @@
 import type { ChangeEvent, FormEvent } from "react";
+import { LoaderIcon, SendIcon } from "./icons";
 import type { GenerationMode } from "./types";
 
 type PromptComposerProps = {
@@ -106,11 +107,12 @@ export function PromptComposer({
               value={prompt}
             />
             <button
+              aria-label="生成图片"
               className="grid h-12 w-12 shrink-0 place-items-center rounded-full bg-indigo-600 text-sm font-bold text-white shadow-lg shadow-indigo-200 hover:bg-indigo-700 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:shadow-none"
               disabled={generating || prompt.trim().length === 0}
               type="submit"
             >
-              {generating ? "..." : "生成图片"}
+              {generating ? <LoaderIcon className="h-5 w-5 animate-spin" /> : <SendIcon />}
             </button>
           </div>
         </div>

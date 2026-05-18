@@ -168,10 +168,45 @@ describe("ImageWorkbench chat canvas", () => {
     renderWorkbench();
 
     expect(await screen.findByRole("complementary", { name: "工作台侧边栏" })).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "隐藏侧边栏" }));
+    const hideSidebarButton = screen.getByRole("button", { name: "隐藏侧边栏" });
+    expect(hideSidebarButton.textContent?.trim()).toBe("");
+    fireEvent.click(hideSidebarButton);
 
     expect(screen.queryByRole("complementary", { name: "工作台侧边栏" })).toBeNull();
-    expect(screen.getByRole("button", { name: "显示侧边栏" })).toBeTruthy();
+    const showSidebarButton = screen.getByRole("button", { name: "显示侧边栏" });
+    expect(showSidebarButton).toBeTruthy();
+    expect(showSidebarButton.textContent?.trim()).toBe("");
+  });
+
+  it("顶部、生成和 AI 图片动作使用 icon-only 按钮但保留 aria-label", async () => {
+    mockFetchByRoute();
+
+    renderWorkbench();
+
+    await screen.findByRole("complementary", { name: "工作台侧边栏" });
+    expect(screen.getByRole("button", { name: "隐藏侧边栏" }).textContent?.trim()).toBe("");
+    expect(screen.getByRole("button", { name: "更多" }).textContent?.trim()).toBe("");
+
+    fireEvent.change(screen.getByLabelText("Prompt"), {
+      target: { value: "一张安静的书桌" }
+    });
+    const generateButton = screen.getByRole("button", { name: "生成图片" });
+    expect(generateButton.textContent?.trim()).toBe("");
+    fireEvent.click(generateButton);
+
+    await screen.findByRole("img", { name: "AI 生成图片" });
+    for (const label of ["下载", "重新生成", "保存配置"]) {
+      const action =
+        label === "下载"
+          ? screen.getByRole("link", { name: label })
+          : screen.getByRole("button", { name: label });
+      expect(action.textContent?.trim()).toBe("");
+    }
+    const copyActions = screen.getAllByRole("button", { name: "复制 Prompt" });
+    expect(copyActions.length).toBeGreaterThanOrEqual(2);
+    copyActions.forEach((action) => {
+      expect(action.textContent?.trim()).toBe("");
+    });
   });
 
   it("侧边栏设置区默认只展示尺寸，展开后展示完整参数", async () => {
@@ -348,6 +383,44 @@ describe("ImageWorkbench chat canvas", () => {
     );
     expect(fetchMock.mock.calls.some(([url]) => url === "/api/images/generations")).toBe(false);
     expect(fetchMock.mock.calls.some(([url]) => url === "/api/images/edits")).toBe(false);
+  });
+
+  it("默认和我的模板按钮只切换侧边栏列表，不打开 Modal", async () => {
+    mockFetchByRoute({
+      initialLibrary: createTemplateLibraryResponse({ mine: [mineTemplate] })
+    });
+
+    renderWorkbench();
+    const sidebar = await screen.findByRole("complementary", { name: "工作台侧边栏" });
+
+    expect(within(sidebar).getByRole("button", { name: "默认" })).toBeTruthy();
+    expect(within(sidebar).getByRole("button", { name: "我的" })).toBeTruthy();
+    expect(within(sidebar).getByRole("button", { name: "打开模板分类 电商产品" })).toBeTruthy();
+    expect(screen.queryByRole("dialog")).toBeNull();
+
+    fireEvent.click(within(sidebar).getByRole("button", { name: "我的" }));
+
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(within(sidebar).getByRole("button", { name: "打开我的模板 我的玻璃杯配置" })).toBeTruthy();
+    expect(within(sidebar).queryByRole("button", { name: "打开模板分类 电商产品" })).toBeNull();
+
+    fireEvent.click(within(sidebar).getByRole("button", { name: "默认" }));
+
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(within(sidebar).getByRole("button", { name: "打开模板分类 电商产品" })).toBeTruthy();
+    expect(within(sidebar).queryByRole("button", { name: "打开我的模板 我的玻璃杯配置" })).toBeNull();
+  });
+
+  it("我的模板列表为空时显示简短空状态", async () => {
+    mockFetchByRoute();
+
+    renderWorkbench();
+    const sidebar = await screen.findByRole("complementary", { name: "工作台侧边栏" });
+
+    fireEvent.click(within(sidebar).getByRole("button", { name: "我的" }));
+
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(within(sidebar).getByText("暂无我的模板")).toBeTruthy();
   });
 
   it("AI 图片消息重新生成使用消息关联 prompt 和参数调用生成 API", async () => {
