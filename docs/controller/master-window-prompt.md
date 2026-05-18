@@ -1,5 +1,7 @@
 # image-service 主控窗口提示词
 
+> 历史调度记录，仅供追溯。当前项目入口以根目录 `AGENTS.md`、`README.md` 和 `docs/README.md` 为准。
+
 下面这段可以作为 image-service 新主控窗口的初始提示词。
 
 ```text

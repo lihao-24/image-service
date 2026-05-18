@@ -1,5 +1,7 @@
 # Phase 0 进度记录
 
+> 历史调度记录，仅供追溯。当前项目入口以根目录 `AGENTS.md`、`README.md` 和 `docs/README.md` 为准。
+
 目标：为 image-service 创建参考文档和主控工作入口，后续通过主控窗口模式推进正式设计、计划和实现。
 
 约束：
