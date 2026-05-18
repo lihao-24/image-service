@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useSyncExternalStore, useState } from "react";
+import { useEffect, useMemo, useRef, useSyncExternalStore, useState } from "react";
 import type { PublicImageConfig } from "@/lib/config";
 import { ChatSidebar } from "./workbench/chat-sidebar";
 import {
@@ -64,6 +64,8 @@ export default function ImageWorkbench({ config, userLabel }: ImageWorkbenchProp
   const [prompt, setPrompt] = useState("");
   const [referenceImage, setReferenceImage] = useState<File | null>(null);
   const [referencePreviewUrl, setReferencePreviewUrl] = useState("");
+  const composerPreviewUrlRef = useRef("");
+  const messagePreviewUrlsRef = useRef(new Set<string>());
   const [messages, setMessages] = useState<WorkbenchMessage[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -82,12 +84,16 @@ export default function ImageWorkbench({ config, userLabel }: ImageWorkbenchProp
   }, []);
 
   useEffect(() => {
+    const messagePreviewUrls = messagePreviewUrlsRef.current;
     return () => {
-      if (referencePreviewUrl) {
-        URL.revokeObjectURL(referencePreviewUrl);
+      if (composerPreviewUrlRef.current) {
+        URL.revokeObjectURL(composerPreviewUrlRef.current);
+      }
+      for (const url of messagePreviewUrls) {
+        URL.revokeObjectURL(url);
       }
     };
-  }, [referencePreviewUrl]);
+  }, []);
 
   const saveTarget = messages.find(
     (message): message is WorkbenchAssistantMessage =>
@@ -135,8 +141,9 @@ export default function ImageWorkbench({ config, userLabel }: ImageWorkbenchProp
   }
 
   function handleReferenceImageChange(file: File | null) {
-    if (referencePreviewUrl) {
-      URL.revokeObjectURL(referencePreviewUrl);
+    if (composerPreviewUrlRef.current) {
+      URL.revokeObjectURL(composerPreviewUrlRef.current);
+      composerPreviewUrlRef.current = "";
       setReferencePreviewUrl("");
     }
 
@@ -152,7 +159,9 @@ export default function ImageWorkbench({ config, userLabel }: ImageWorkbenchProp
     }
 
     setReferenceImage(file);
-    setReferencePreviewUrl(URL.createObjectURL(file));
+    const nextPreviewUrl = URL.createObjectURL(file);
+    composerPreviewUrlRef.current = nextPreviewUrl;
+    setReferencePreviewUrl(nextPreviewUrl);
     setEditNotice("");
   }
 
@@ -198,13 +207,18 @@ export default function ImageWorkbench({ config, userLabel }: ImageWorkbenchProp
     const userMessageId = createId("user");
     const assistantMessageId = createId("assistant");
     const createdAt = new Date().toISOString();
+    const messageReferencePreviewUrl =
+      generationMode === "image-edit" && generationReference ? generationReferencePreviewUrl : undefined;
+    if (messageReferencePreviewUrl) {
+      messagePreviewUrlsRef.current.add(messageReferencePreviewUrl);
+    }
     const userMessage: WorkbenchUserMessage = {
       id: userMessageId,
       role: "user",
       prompt: promptText,
       mode: generationMode,
       params: generationParams,
-      referencePreviewUrl: generationReferencePreviewUrl,
+      referencePreviewUrl: messageReferencePreviewUrl,
       referenceFileName,
       collapsed: true,
       createdAt
@@ -226,6 +240,12 @@ export default function ImageWorkbench({ config, userLabel }: ImageWorkbenchProp
     if (clearComposer) {
       setPrompt("");
       setReferenceImage(null);
+      if (
+        generationReferencePreviewUrl &&
+        composerPreviewUrlRef.current === generationReferencePreviewUrl
+      ) {
+        composerPreviewUrlRef.current = "";
+      }
       setReferencePreviewUrl("");
     }
 
@@ -326,6 +346,10 @@ export default function ImageWorkbench({ config, userLabel }: ImageWorkbenchProp
 
     if (message.mode === "image-edit") {
       setReferenceImage(null);
+      if (composerPreviewUrlRef.current) {
+        URL.revokeObjectURL(composerPreviewUrlRef.current);
+        composerPreviewUrlRef.current = "";
+      }
       setReferencePreviewUrl("");
       setEditNotice("参考图需要重新选择。");
     }
@@ -400,7 +424,7 @@ export default function ImageWorkbench({ config, userLabel }: ImageWorkbenchProp
 
   return (
     <main className="flex h-dvh w-screen overflow-hidden bg-white text-slate-950">
-      {sidebarOpen ? (
+      {!isMobileViewport && sidebarOpen ? (
         <ChatSidebar
           className="hidden h-full w-[280px] shrink-0 flex-col bg-slate-950 px-4 py-4 text-slate-100 shadow-2xl md:flex"
           categories={library?.categories ?? []}

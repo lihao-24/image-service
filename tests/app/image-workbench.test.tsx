@@ -197,16 +197,18 @@ describe("ImageWorkbench chat canvas", () => {
     window.innerWidth = 375;
 
     renderWorkbench();
-    expect(await screen.findByRole("complementary", { name: "工作台侧边栏" })).toBeTruthy();
+
+    await screen.findByText("今天想生成什么？");
+    expect(screen.queryByRole("complementary", { name: "工作台侧边栏" })).toBeNull();
+
     fireEvent.click(screen.getByRole("button", { name: "显示侧边栏" }));
 
-    const sidebars = screen.getAllByRole("complementary", { name: "工作台侧边栏" });
-    expect(sidebars.length).toBe(2);
+    expect(screen.getByRole("complementary", { name: "工作台侧边栏" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "关闭侧边栏遮罩" })).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: "关闭侧边栏面板" }));
 
-    expect(screen.getAllByRole("complementary", { name: "工作台侧边栏" }).length).toBe(1);
+    expect(screen.queryByRole("complementary", { name: "工作台侧边栏" })).toBeNull();
   });
 
   it("初始空状态显示，首次生成后插入用户消息和 AI loading，并清空输入框", async () => {
@@ -310,6 +312,11 @@ describe("ImageWorkbench chat canvas", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: "生成图片" }));
     await screen.findByRole("img", { name: "AI 生成图片" });
+
+    expect(screen.getByRole("img", { name: "参考图缩略图" }).getAttribute("src")).toBe(
+      "blob:reference-preview"
+    );
+    expect(URL.revokeObjectURL).not.toHaveBeenCalledWith("blob:reference-preview");
 
     fireEvent.click(screen.getByRole("button", { name: "编辑用户消息" }));
 
