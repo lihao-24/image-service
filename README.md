@@ -62,9 +62,77 @@ allowlist，支持文生图、参考图生图、临时预览、下载当前临�
 
 - 不提交真实 `.env`、API key、数据库文件、上传文件或生成图片。
 - `.env.example` 只包含变量名和占位说明。
+- `env/*.env.example` 只保存部署模板；真实 `.env.production` 和 `.env.local` 不提交。
 - 第一版不保存生成图片本体。
 - 不保存上传参考图文件。
 - `user_id` 只能来自服务端校验后的 Supabase Auth 用户。
+
+## 生产部署
+
+目标链路：
+
+```text
+https://image.lihao66.top
+  -> VPS Caddy
+  -> Tailscale
+  -> Mac mini image-service:3010
+```
+
+生产容器使用 `compose/prod/image-service.prod.compose.yml`。首次部署前，在项目根目录创建
+真实生产环境文件：
+
+```bash
+cp env/image-service.production.env.example .env.production
+```
+
+然后填入真实 `NEXT_PUBLIC_SUPABASE_ANON_KEY`、`SUB2API_API_KEY` 等值。不要提交
+`.env.production`。
+
+生产数据目录：
+
+```bash
+mkdir -p /Users/hao/Desktop/lihao-data/image-service/sqlite
+```
+
+启动或更新生产容器：
+
+```bash
+docker compose --env-file .env.production -f compose/prod/image-service.prod.compose.yml up -d --build
+```
+
+检查状态：
+
+```bash
+docker compose --env-file .env.production -f compose/prod/image-service.prod.compose.yml ps
+curl -fsS http://127.0.0.1:3010/health
+curl -I https://image.lihao66.top/health
+```
+
+VPS Caddy 站点片段参考 `caddy/sites/image.lihao66.top.caddy`。Caddy 和 DNS 变更需要在
+对应机器上手动确认后应用。
+
+## 后续更新
+
+常规更新流程：
+
+```bash
+git pull
+pnpm lint
+pnpm typecheck
+pnpm test
+pnpm build
+docker compose --env-file .env.production -f compose/prod/image-service.prod.compose.yml up -d --build
+docker compose --env-file .env.production -f compose/prod/image-service.prod.compose.yml ps
+curl -fsS http://127.0.0.1:3010/health
+```
+
+如需回滚，先找到上一个可用提交，再重建容器：
+
+```bash
+git log --oneline -5
+git checkout <good-commit>
+docker compose --env-file .env.production -f compose/prod/image-service.prod.compose.yml up -d --build
+```
 
 ## 模块边界
 
