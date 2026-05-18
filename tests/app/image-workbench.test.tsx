@@ -411,6 +411,39 @@ describe("ImageWorkbench chat canvas", () => {
     expect(within(sidebar).queryByRole("button", { name: "打开我的模板 我的玻璃杯配置" })).toBeNull();
   });
 
+  it("侧边栏模板列表限制横向溢出并截断长文本", async () => {
+    mockFetchByRoute({
+      initialLibrary: createTemplateLibraryResponse({
+        categories: [
+          {
+            id: "ecommerce-product",
+            name: "很长很长的电商产品分类名称用于验证侧边栏不会被撑宽",
+            description: "这是一段很长很长的分类描述文本，用于验证模板侧边栏内容超出时隐藏并显示省略号。"
+          }
+        ]
+      })
+    });
+
+    renderWorkbench();
+    const sidebar = await screen.findByRole("complementary", { name: "工作台侧边栏" });
+    const templateButton = within(sidebar).getByRole("button", {
+      name: "打开模板分类 很长很长的电商产品分类名称用于验证侧边栏不会被撑宽"
+    });
+    const scrollContainer = templateButton.closest("[data-template-scroll]");
+    const title = within(templateButton).getByText("很长很长的电商产品分类名称用于验证侧边栏不会被撑宽");
+    const description = within(templateButton).getByText(
+      "这是一段很长很长的分类描述文本，用于验证模板侧边栏内容超出时隐藏并显示省略号。"
+    );
+
+    expect(scrollContainer?.className).toContain("overflow-x-hidden");
+    expect(scrollContainer?.className).toContain("min-w-0");
+    expect(templateButton.className).toContain("w-full");
+    expect(templateButton.className).toContain("min-w-0");
+    expect(templateButton.className).toContain("overflow-hidden");
+    expect(title.className).toContain("truncate");
+    expect(description.className).toContain("truncate");
+  });
+
   it("我的模板列表为空时显示简短空状态", async () => {
     mockFetchByRoute();
 
@@ -571,9 +604,11 @@ function generationCalls(fetchMock: ReturnType<typeof mockFetchByRoute>) {
   return fetchMock.mock.calls.filter(([url]) => url === "/api/images/generations");
 }
 
-function createTemplateLibraryResponse(overrides: { mine?: unknown[] } = {}) {
+function createTemplateLibraryResponse(
+  overrides: { categories?: unknown[]; mine?: unknown[] } = {}
+) {
   return {
-    categories: [
+    categories: overrides.categories ?? [
       { id: "ecommerce-product", name: "电商产品", description: "商品主图" },
       { id: "social-cover", name: "社媒封面", description: "封面和活动图" },
       { id: "infographic", name: "信息图表", description: "知识卡片" }

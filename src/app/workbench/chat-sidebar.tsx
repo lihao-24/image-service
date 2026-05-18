@@ -156,12 +156,12 @@ export function ChatSidebar({
         </div>
       </section>
 
-      <section className="mt-5 flex min-h-0 flex-1 flex-col">
-        <h2 className="mb-3 text-sm font-semibold text-slate-300">模板</h2>
-        <div className="mb-3 grid grid-cols-2 gap-2">
+      <section className="mt-5 flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+        <h2 className="mb-3 min-w-0 truncate text-sm font-semibold text-slate-300">模板</h2>
+        <div className="mb-3 grid min-w-0 grid-cols-2 gap-2">
           <button
             aria-pressed={templateListView === "default"}
-            className={`min-h-11 rounded-lg px-3 text-sm font-semibold ${
+            className={`min-h-11 min-w-0 rounded-lg px-3 text-sm font-semibold ${
               templateListView === "default"
                 ? "bg-white text-slate-950"
                 : "bg-white/10 text-slate-300 hover:bg-white/15 hover:text-white"
@@ -173,7 +173,7 @@ export function ChatSidebar({
           </button>
           <button
             aria-pressed={templateListView === "mine"}
-            className={`min-h-11 rounded-lg px-3 text-sm font-semibold ${
+            className={`min-h-11 min-w-0 rounded-lg px-3 text-sm font-semibold ${
               templateListView === "mine"
                 ? "bg-white text-slate-950"
                 : "bg-white/10 text-slate-300 hover:bg-white/15 hover:text-white"
@@ -184,13 +184,13 @@ export function ChatSidebar({
             我的
           </button>
         </div>
-        <div className="min-h-0 overflow-y-auto pr-1">
+        <div className="min-h-0 min-w-0 overflow-x-hidden overflow-y-auto pr-1" data-template-scroll>
           {templateListView === "default" ? (
-            <div className="grid gap-2">
+            <div className="grid min-w-0 gap-2">
               {categories.map((category) => (
                 <button
                   aria-label={`打开模板分类 ${category.name}`}
-                  className="min-h-11 rounded-lg px-3 py-2 text-left text-sm font-semibold text-slate-300 hover:bg-white/10 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300"
+                  className="min-h-11 min-w-0 w-full overflow-hidden rounded-lg px-3 py-2 text-left text-sm font-semibold text-slate-300 hover:bg-white/10 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300"
                   key={category.id}
                   onClick={() =>
                     onOpenTemplates({
@@ -202,9 +202,9 @@ export function ChatSidebar({
                   }
                   type="button"
                 >
-                  <span className="block">{category.name}</span>
+                  <span className="block min-w-0 truncate overflow-hidden">{category.name}</span>
                   {category.description ? (
-                    <span className="block truncate text-xs font-normal text-slate-500">
+                    <span className="block min-w-0 truncate overflow-hidden text-xs font-normal text-slate-500">
                       {category.description}
                     </span>
                   ) : null}
@@ -212,16 +212,16 @@ export function ChatSidebar({
               ))}
             </div>
           ) : (
-            <div className="grid gap-2">
+            <div className="grid min-w-0 gap-2">
               {mineTemplates.length === 0 ? (
-                <p className="m-0 rounded-lg bg-white/5 px-3 py-4 text-sm text-slate-400">
+                <p className="m-0 min-w-0 truncate overflow-hidden rounded-lg bg-white/5 px-3 py-4 text-sm text-slate-400">
                   暂无我的模板
                 </p>
               ) : null}
               {mineTemplates.map((template) => (
                 <button
                   aria-label={`打开我的模板 ${template.title}`}
-                  className="min-h-11 rounded-lg px-3 py-2 text-left text-sm font-semibold text-slate-300 hover:bg-white/10 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300"
+                  className="min-h-11 min-w-0 w-full overflow-hidden rounded-lg px-3 py-2 text-left text-sm font-semibold text-slate-300 hover:bg-white/10 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300"
                   key={template.id}
                   onClick={() =>
                     onOpenTemplates({
@@ -232,8 +232,8 @@ export function ChatSidebar({
                   }
                   type="button"
                 >
-                  <span className="block truncate">{template.title}</span>
-                  <span className="block truncate text-xs font-normal text-slate-500">
+                  <span className="block min-w-0 truncate overflow-hidden">{template.title}</span>
+                  <span className="block min-w-0 truncate overflow-hidden text-xs font-normal text-slate-500">
                     {template.size} · {template.quality}
                   </span>
                 </button>
