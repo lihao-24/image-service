@@ -385,6 +385,24 @@ describe("ImageWorkbench chat canvas", () => {
     expect(fetchMock.mock.calls.some(([url]) => url === "/api/images/edits")).toBe(false);
   });
 
+  it("移动端模板 Modal 使用整窗滚动避免内容被裁切", async () => {
+    mockFetchByRoute();
+    window.innerWidth = 375;
+
+    renderWorkbench();
+    await screen.findByText("今天想生成什么？");
+    fireEvent.click(screen.getByRole("button", { name: "显示侧边栏" }));
+    fireEvent.click(await screen.findByRole("button", { name: "打开模板分类 电商产品" }));
+
+    const modal = await screen.findByRole("dialog", { name: "电商产品模板" });
+    const overlay = modal.parentElement;
+
+    expect(overlay?.className).toContain("max-md:items-start");
+    expect(overlay?.className).toContain("max-md:overflow-y-auto");
+    expect(modal.className).toContain("max-md:max-h-none");
+    expect(modal.className).toContain("max-md:overflow-visible");
+  });
+
   it("默认和我的模板按钮只切换侧边栏列表，不打开 Modal", async () => {
     mockFetchByRoute({
       initialLibrary: createTemplateLibraryResponse({ mine: [mineTemplate] })

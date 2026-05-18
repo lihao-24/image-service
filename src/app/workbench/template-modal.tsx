@@ -74,11 +74,11 @@ export function TemplateModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-slate-950/45 p-4 max-md:items-start max-md:overflow-y-auto">
       <div
         aria-label={modal.title}
         aria-modal="true"
-        className="grid max-h-[86dvh] w-full max-w-5xl grid-cols-[minmax(0,0.9fr)_minmax(320px,0.7fr)] overflow-hidden rounded-lg bg-white shadow-2xl max-md:grid-cols-1"
+        className="grid max-h-[86dvh] w-full max-w-5xl grid-cols-[minmax(0,0.9fr)_minmax(320px,0.7fr)] overflow-hidden rounded-lg bg-white shadow-2xl max-md:max-h-none max-md:grid-cols-1 max-md:overflow-visible"
         role="dialog"
       >
         <div className="min-h-0 border-r border-slate-200 p-5 max-md:border-b max-md:border-r-0">
