@@ -8,7 +8,7 @@ import {
 const TEMPLATE: BuiltinPromptTemplate = {
   id: "builtin-test-template",
   title: "测试模板",
-  category: "social-cover",
+  category: "ui-interface",
   tags: ["测试", "模板"],
   mode: "text-to-image",
   recommended: {

@@ -427,7 +427,7 @@ export default function ImageWorkbench({ config, userLabel }: ImageWorkbenchProp
     <main className="flex h-dvh w-screen overflow-hidden bg-white text-slate-950">
       {!isMobileViewport && sidebarOpen ? (
         <ChatSidebar
-          className="hidden h-full w-[280px] shrink-0 flex-col bg-slate-950 px-4 py-4 text-slate-100 shadow-2xl md:flex"
+          className="hidden h-full w-[280px] shrink-0 flex-col overflow-hidden bg-slate-950 px-4 py-4 text-slate-100 shadow-2xl md:flex"
           categories={library?.categories ?? []}
           config={config}
           mineTemplates={library?.templates.mine ?? []}
@@ -451,7 +451,7 @@ export default function ImageWorkbench({ config, userLabel }: ImageWorkbenchProp
             type="button"
           />
           <ChatSidebar
-            className="relative z-10 flex h-full w-[min(84vw,320px)] flex-col bg-slate-950 px-4 py-4 text-slate-100 shadow-2xl"
+            className="relative z-10 flex h-full w-[min(84vw,320px)] flex-col overflow-hidden bg-slate-950 px-4 py-4 text-slate-100 shadow-2xl"
             categories={library?.categories ?? []}
             config={config}
             mineTemplates={library?.templates.mine ?? []}
@@ -472,7 +472,7 @@ export default function ImageWorkbench({ config, userLabel }: ImageWorkbenchProp
       ) : null}
 
       <section className="flex min-w-0 flex-1 flex-col bg-white">
-        <header className="flex min-h-16 items-center justify-between border-b border-slate-200 px-4">
+        <header className="flex min-h-14 items-center justify-between border-b border-slate-200 px-4">
           <div className="flex items-center gap-3">
             <button
               aria-label={
@@ -484,7 +484,7 @@ export default function ImageWorkbench({ config, userLabel }: ImageWorkbenchProp
                     ? "隐藏侧边栏"
                     : "显示侧边栏"
               }
-              className="grid h-11 w-11 place-items-center rounded-lg text-slate-700 hover:bg-slate-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-600"
+              className="grid h-9 w-9 place-items-center rounded-lg text-slate-700 hover:bg-slate-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-600"
               onClick={() => {
                 if (isMobileViewport) {
                   setMobileDrawerOpen((current) => !current);
@@ -500,7 +500,7 @@ export default function ImageWorkbench({ config, userLabel }: ImageWorkbenchProp
           </div>
           <button
             aria-label="更多"
-            className="grid h-11 w-11 place-items-center rounded-lg text-slate-500 hover:bg-slate-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-600"
+            className="grid h-9 w-9 place-items-center rounded-lg text-slate-500 hover:bg-slate-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-600"
             type="button"
           >
             <MoreIcon />

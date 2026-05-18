@@ -332,11 +332,11 @@ describe("ImageWorkbench chat canvas", () => {
     expect((screen.getByLabelText("输出格式") as HTMLSelectElement).value).toBe("webp");
   });
 
-  it("参考图消息编辑提示重新选择参考图，不回填 File", async () => {
+  it("图生图消息编辑提示重新选择参考图，不回填 File", async () => {
     mockFetchByRoute();
 
     renderWorkbench();
-    fireEvent.click(screen.getByRole("button", { name: "参考图" }));
+    fireEvent.click(screen.getAllByRole("button", { name: "图生图" }).at(-1)!);
     fireEvent.change(screen.getByLabelText("参考图文件"), {
       target: {
         files: [new File(["image"], "reference.png", { type: "image/png" })]
@@ -460,6 +460,26 @@ describe("ImageWorkbench chat canvas", () => {
     expect(templateButton.className).toContain("overflow-hidden");
     expect(title.className).toContain("truncate");
     expect(description.className).toContain("truncate");
+  });
+
+  it("侧边栏模板区保留固定头部并使用更紧凑按钮尺寸", async () => {
+    mockFetchByRoute();
+
+    renderWorkbench();
+    const sidebar = await screen.findByRole("complementary", { name: "工作台侧边栏" });
+    const templateRegion = within(sidebar).getByRole("region", { name: "模板" });
+    const scrollContainer = templateRegion.querySelector("[data-template-scroll]");
+    const defaultButton = within(templateRegion).getByRole("button", { name: "默认" });
+    const categoryButton = within(templateRegion).getByRole("button", { name: "打开模板分类 电商产品" });
+    const settingsToggle = within(sidebar).getByRole("button", { name: "展开设置" });
+
+    expect(templateRegion.className).toContain("min-h-[220px]");
+    expect(templateRegion.className).toContain("overflow-hidden");
+    expect(scrollContainer?.className).toContain("flex-1");
+    expect(scrollContainer?.className).toContain("overflow-y-auto");
+    expect(defaultButton.className).toContain("min-h-9");
+    expect(categoryButton.className).toContain("min-h-10");
+    expect(settingsToggle.className).toContain("min-h-9");
   });
 
   it("我的模板列表为空时显示简短空状态", async () => {
@@ -628,7 +648,7 @@ function createTemplateLibraryResponse(
   return {
     categories: overrides.categories ?? [
       { id: "ecommerce-product", name: "电商产品", description: "商品主图" },
-      { id: "social-cover", name: "社媒封面", description: "封面和活动图" },
+      { id: "ui-interface", name: "UI与界面", description: "应用界面和社媒截图" },
       { id: "infographic", name: "信息图表", description: "知识卡片" }
     ],
     templates: {

@@ -97,7 +97,7 @@ describe("Prompt template library API", () => {
 
     expect(response.status).toBe(200);
     expect(body.categories).toEqual(
-      expect.arrayContaining([expect.objectContaining({ id: "ecommerce-product", name: "电商产品" })])
+      expect.arrayContaining([expect.objectContaining({ id: "ecommerce-product", name: "商品与电商" })])
     );
     expect(body.templates.builtin).toEqual(
       expect.arrayContaining([

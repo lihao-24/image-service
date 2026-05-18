@@ -34,25 +34,25 @@ export function MessageList({
         <p className="mt-3 text-base text-slate-500">选择模板，或直接描述画面。</p>
         <div className="mt-8 grid w-full max-w-2xl gap-3 sm:grid-cols-3">
           <button
-            className="min-h-11 rounded-lg border border-slate-200 bg-white px-4 font-semibold text-slate-800 shadow-sm hover:bg-slate-50"
+            className="min-h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-800 shadow-sm hover:bg-slate-50"
             onClick={() => onOpenTemplateCategory("ecommerce-product", "电商产品模板")}
             type="button"
           >
             电商主图
           </button>
           <button
-            className="min-h-11 rounded-lg border border-slate-200 bg-white px-4 font-semibold text-slate-800 shadow-sm hover:bg-slate-50"
-            onClick={() => onOpenTemplateCategory("social-cover", "社媒封面模板")}
+            className="min-h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-800 shadow-sm hover:bg-slate-50"
+            onClick={() => onOpenTemplateCategory("ui-interface", "UI与界面模板")}
             type="button"
           >
-            社媒封面
+            UI界面
           </button>
           <button
-            className="min-h-11 rounded-lg border border-slate-200 bg-white px-4 font-semibold text-slate-800 shadow-sm hover:bg-slate-50"
-            onClick={() => onOpenTemplateCategory("image-edit", "参考图模板")}
+            className="min-h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-800 shadow-sm hover:bg-slate-50"
+            onClick={() => onOpenTemplateCategory("image-edit", "图生图模板")}
             type="button"
           >
-            参考图改造
+            图生图
           </button>
         </div>
       </section>
@@ -110,7 +110,7 @@ function UserMessage({
       ) : null}
       <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
         <div className="flex flex-wrap gap-2 text-xs font-semibold text-slate-300">
-          <span>{message.mode === "image-edit" ? "参考图" : "文生图"}</span>
+          <span>{message.mode === "image-edit" ? "图生图" : "文生图"}</span>
           <span>{message.params.size}</span>
           <span>{message.params.quality}</span>
         </div>
@@ -192,7 +192,7 @@ function AssistantMessage({
       <div className="mt-3 flex flex-wrap gap-2">
         <a
           aria-label="下载"
-          className="grid h-11 w-11 place-items-center rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-600"
+          className="grid h-9 w-9 place-items-center rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-600"
           download={message.image?.filename}
           href={message.image?.src ?? "#"}
         >
@@ -200,7 +200,7 @@ function AssistantMessage({
         </a>
         <button
           aria-label="重新生成"
-          className="grid h-11 w-11 place-items-center rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-600"
+          className="grid h-9 w-9 place-items-center rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-600"
           onClick={onRegenerate}
           type="button"
         >
@@ -208,7 +208,7 @@ function AssistantMessage({
         </button>
         <button
           aria-label="复制 Prompt"
-          className="grid h-11 w-11 place-items-center rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-600"
+          className="grid h-9 w-9 place-items-center rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-600"
           onClick={() => void navigator.clipboard?.writeText(message.prompt)}
           type="button"
         >
@@ -216,7 +216,7 @@ function AssistantMessage({
         </button>
         <button
           aria-label="保存配置"
-          className="grid h-11 w-11 place-items-center rounded-lg bg-slate-950 text-white hover:bg-slate-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-600"
+          className="grid h-9 w-9 place-items-center rounded-lg bg-slate-950 text-white hover:bg-slate-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-600"
           onClick={onSaveRecipe}
           type="button"
         >

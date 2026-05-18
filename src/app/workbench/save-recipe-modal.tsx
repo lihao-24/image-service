@@ -38,7 +38,7 @@ export function SaveRecipeModal({
           <span>配置名称</span>
           <input
             aria-label="配置名称"
-            className="min-h-11 rounded-lg border border-slate-200 px-3 text-base text-slate-950"
+            className="min-h-10 rounded-lg border border-slate-200 px-3 text-sm text-slate-950"
             maxLength={120}
             onChange={(event) => setTitle(event.target.value)}
             value={title}
@@ -47,14 +47,14 @@ export function SaveRecipeModal({
         {message ? <p className="mt-3 text-sm font-semibold text-emerald-700">{message}</p> : null}
         <div className="mt-5 flex justify-end gap-3">
           <button
-            className="min-h-11 rounded-lg border border-slate-200 px-4 font-semibold text-slate-700 hover:bg-slate-50"
+            className="min-h-10 rounded-lg border border-slate-200 px-3 text-sm font-semibold text-slate-700 hover:bg-slate-50"
             onClick={onClose}
             type="button"
           >
             取消
           </button>
           <button
-            className="min-h-11 rounded-lg bg-indigo-600 px-4 font-semibold text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
+            className="min-h-10 rounded-lg bg-indigo-600 px-3 text-sm font-semibold text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
             disabled={saving}
             onClick={() => onSave(title)}
             type="button"

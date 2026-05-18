@@ -41,7 +41,7 @@ export function PromptComposer({
         <div className="mb-2 inline-flex rounded-full bg-slate-100 p-1">
           <button
             aria-pressed={mode === "text-to-image"}
-            className={`min-h-11 rounded-full px-4 text-sm font-semibold ${
+            className={`min-h-9 rounded-full px-3 text-sm font-semibold ${
               mode === "text-to-image" ? "bg-white text-slate-950 shadow-sm" : "text-slate-600"
             }`}
             onClick={() => onModeChange("text-to-image")}
@@ -51,20 +51,20 @@ export function PromptComposer({
           </button>
           <button
             aria-pressed={mode === "image-edit"}
-            className={`min-h-11 rounded-full px-4 text-sm font-semibold ${
+            className={`min-h-9 rounded-full px-3 text-sm font-semibold ${
               mode === "image-edit" ? "bg-white text-slate-950 shadow-sm" : "text-slate-600"
             }`}
             onClick={() => onModeChange("image-edit")}
             type="button"
           >
-            参考图
+            图生图
           </button>
         </div>
 
-        <div className="rounded-[24px] border border-slate-200 bg-white p-3 shadow-lg shadow-slate-200/70">
+        <div className="rounded-[20px] border border-slate-200 bg-white p-3 shadow-lg shadow-slate-200/70">
           {mode === "image-edit" ? (
             <div className="mb-3 flex flex-wrap items-center gap-3">
-              <label className="inline-flex min-h-11 cursor-pointer items-center rounded-lg border border-slate-200 px-3 text-sm font-semibold text-slate-700 hover:bg-slate-50">
+              <label className="inline-flex min-h-9 cursor-pointer items-center rounded-lg border border-slate-200 px-3 text-sm font-semibold text-slate-700 hover:bg-slate-50">
                 <span>上传参考图</span>
                 <input
                   aria-label="参考图文件"
@@ -88,7 +88,7 @@ export function PromptComposer({
                   {referenceImage.name}
                 </span>
               ) : (
-                <span className="text-sm text-slate-500">参考图只用于本次请求。</span>
+                <span className="text-sm text-slate-500">图生图参考图只用于本次请求。</span>
               )}
             </div>
           ) : null}
@@ -108,7 +108,7 @@ export function PromptComposer({
             />
             <button
               aria-label="生成图片"
-              className="grid h-12 w-12 shrink-0 place-items-center rounded-full bg-indigo-600 text-sm font-bold text-white shadow-lg shadow-indigo-200 hover:bg-indigo-700 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:shadow-none"
+              className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-indigo-600 text-sm font-bold text-white shadow-md shadow-indigo-200 hover:bg-indigo-700 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:shadow-none"
               disabled={generating || prompt.trim().length === 0}
               type="submit"
             >

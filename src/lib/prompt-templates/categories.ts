@@ -1,66 +1,70 @@
 export const PROMPT_TEMPLATE_CATEGORIES = [
   {
-    id: "ecommerce-product",
-    name: "电商产品",
-    description: "商品主图、详情页视觉、套装陈列和材质卖点表达。"
-  },
-  {
-    id: "social-cover",
-    name: "社媒封面",
-    description: "小红书、公众号、视频封面和活动内容封面。"
-  },
-  {
-    id: "live-commerce",
-    name: "直播带货",
-    description: "直播间背景、商品讲解屏、福利弹窗和转化氛围图。"
-  },
-  {
-    id: "poster-typography",
-    name: "海报字体",
-    description: "标题字、活动海报、节日 KV 和字体排版视觉。"
-  },
-  {
-    id: "photoreal",
-    name: "摄影写实",
-    description: "产品摄影、人像摄影、空间摄影和自然光写实画面。"
-  },
-  {
-    id: "character",
-    name: "人物角色",
-    description: "IP 角色、头像、穿搭、职业形象和角色设定。"
-  },
-  {
-    id: "illustration-art",
-    name: "插画艺术",
-    description: "扁平插画、绘本、潮玩、艺术风格和概念视觉。"
+    id: "ui-interface",
+    name: "UI与界面",
+    description: "应用界面、社媒截图、直播界面、游戏 UI 和网页视觉。"
   },
   {
     id: "infographic",
-    name: "信息图表",
-    description: "流程图、对比图、知识卡片和数据解释图。"
+    name: "图表与信息可视化",
+    description: "信息图、知识卡片、技术图解、数据可视化和分析报告。"
   },
   {
-    id: "brand-visual",
-    name: "品牌视觉",
-    description: "品牌板、包装延展、Logo 氛围图和视觉系统。"
+    id: "poster-typography",
+    name: "海报与排版",
+    description: "主题海报、字体设计、活动 KV、旅行海报和视觉排版。"
+  },
+  {
+    id: "ecommerce-product",
+    name: "商品与电商",
+    description: "商品主图、产品广告、包装标签、拆解图和电商英雄图。"
+  },
+  {
+    id: "brand-logo",
+    name: "品牌与标志",
+    description: "Logo 概念、品牌身份、触点系统、品牌人格和视觉规范。"
+  },
+  {
+    id: "architecture-space",
+    name: "建筑与空间",
+    description: "建筑地标、空间摄影、室内外场景和城市空间视觉。"
+  },
+  {
+    id: "photoreal",
+    name: "摄影与写实",
+    description: "人像摄影、产品摄影、生活抓拍、胶片质感和真实光影。"
+  },
+  {
+    id: "illustration-art",
+    name: "插画与艺术",
+    description: "插画、绘本、纸雕、手绘、艺术风格和概念视觉。"
+  },
+  {
+    id: "character",
+    name: "人物与角色",
+    description: "角色设定、人设参考、头像、穿搭、玩具和 IP 形象。"
   },
   {
     id: "scene-story",
-    name: "场景叙事",
-    description: "电影感场景、故事分镜、空间氛围和叙事画面。"
+    name: "场景与叙事",
+    description: "电影感场景、故事分镜、世界观、连续叙事和氛围画面。"
   },
   {
-    id: "guochao-history",
-    name: "古风国潮",
-    description: "国潮海报、古风人物、历史题材和传统纹样。"
+    id: "history-guofeng",
+    name: "历史与古风题材",
+    description: "国风、古风、历史想象、传统服饰、神话人物和纹样。"
   },
   {
     id: "document-publishing",
-    name: "文档出版",
-    description: "封面、手册、报告页、目录页和出版物视觉。"
+    name: "文档与出版物",
+    description: "演示封面、报告页面、出版封面、手册和档案页视觉。"
+  },
+  {
+    id: "other-scenarios",
+    name: "其他应用场景",
+    description: "签名、服装拼贴、学习手记、旅行拼贴和跨类型创意图。"
   }
 ] as const;
 
 export type PromptTemplateCategory = (typeof PROMPT_TEMPLATE_CATEGORIES)[number];
 export type PromptTemplateCategoryId = PromptTemplateCategory["id"];
-

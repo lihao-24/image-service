@@ -28,7 +28,7 @@ type ChatSidebarProps = {
 type TemplateListView = "default" | "mine";
 
 export function ChatSidebar({
-  className = "flex h-full w-[280px] shrink-0 flex-col bg-slate-950 px-4 py-4 text-slate-100 shadow-2xl",
+  className = "flex h-full w-[280px] shrink-0 flex-col overflow-hidden bg-slate-950 px-4 py-4 text-slate-100 shadow-2xl",
   config,
   provider,
   params,
@@ -49,7 +49,7 @@ export function ChatSidebar({
       aria-label="工作台侧边栏"
       className={className}
     >
-      <div className="mb-7 flex items-center justify-between gap-3">
+      <div className="mb-5 flex items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-3">
           <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-white text-sm font-black text-slate-950">
             IS
@@ -62,7 +62,7 @@ export function ChatSidebar({
         {onClose ? (
           <button
             aria-label="关闭侧边栏面板"
-            className="grid h-11 w-11 shrink-0 place-items-center rounded-lg text-slate-300 hover:bg-white/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300"
+            className="grid h-9 w-9 shrink-0 place-items-center rounded-lg text-slate-300 hover:bg-white/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300"
             onClick={onClose}
             type="button"
           >
@@ -71,11 +71,11 @@ export function ChatSidebar({
         ) : null}
       </div>
 
-      <section className="rounded-lg border border-white/10 bg-white/[0.04] p-3">
-        <div className="mb-3 flex items-center justify-between gap-3">
+      <section className="shrink-0 rounded-lg border border-white/10 bg-white/[0.04] p-3">
+        <div className="mb-2 flex items-center justify-between gap-3">
           <h2 className="m-0 text-sm font-semibold text-white">设置</h2>
           <button
-            className="min-h-11 rounded-lg px-3 text-sm font-semibold text-slate-200 hover:bg-white/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300"
+            className="min-h-9 rounded-lg px-2.5 text-xs font-semibold text-slate-200 hover:bg-white/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300"
             onClick={() => onSettingsExpandedChange(!settingsExpanded)}
             type="button"
           >
@@ -83,13 +83,13 @@ export function ChatSidebar({
           </button>
         </div>
 
-        <div className="grid gap-3">
+        <div className="grid gap-2.5">
           {settingsExpanded ? (
             <label className="grid gap-1.5 text-sm font-semibold text-slate-300">
               <span>Model</span>
               <select
                 aria-label="Model"
-                className="min-h-11 rounded-lg border border-white/10 bg-slate-900 px-3 text-base text-white"
+                className="min-h-10 rounded-lg border border-white/10 bg-slate-900 px-3 text-sm text-white"
                 onChange={(event) => onParamChange({ model: event.target.value })}
                 value={params.model}
               >
@@ -106,7 +106,7 @@ export function ChatSidebar({
             <span>尺寸</span>
             <select
               aria-label="尺寸"
-              className="min-h-11 rounded-lg border border-white/10 bg-slate-900 px-3 text-base text-white"
+              className="min-h-10 rounded-lg border border-white/10 bg-slate-900 px-3 text-sm text-white"
               onChange={(event) => onParamChange({ size: event.target.value })}
               value={params.size}
             >
@@ -124,7 +124,7 @@ export function ChatSidebar({
                 <span>质量</span>
                 <select
                   aria-label="质量"
-                  className="min-h-11 rounded-lg border border-white/10 bg-slate-900 px-3 text-base text-white"
+                  className="min-h-10 rounded-lg border border-white/10 bg-slate-900 px-3 text-sm text-white"
                   onChange={(event) => onParamChange({ quality: event.target.value })}
                   value={params.quality}
                 >
@@ -140,7 +140,7 @@ export function ChatSidebar({
                 <span>输出格式</span>
                 <select
                   aria-label="输出格式"
-                  className="min-h-11 rounded-lg border border-white/10 bg-slate-900 px-3 text-base text-white"
+                  className="min-h-10 rounded-lg border border-white/10 bg-slate-900 px-3 text-sm text-white"
                   onChange={(event) => onParamChange({ outputFormat: event.target.value })}
                   value={params.outputFormat}
                 >
@@ -156,12 +156,15 @@ export function ChatSidebar({
         </div>
       </section>
 
-      <section className="mt-5 flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-        <h2 className="mb-3 min-w-0 truncate text-sm font-semibold text-slate-300">模板</h2>
-        <div className="mb-3 grid min-w-0 grid-cols-2 gap-2">
+      <section
+        aria-label="模板"
+        className="mt-4 flex min-h-[220px] min-w-0 flex-1 flex-col overflow-hidden"
+      >
+        <h2 className="mb-2 min-w-0 truncate text-sm font-semibold text-slate-300">模板</h2>
+        <div className="mb-2 grid min-w-0 shrink-0 grid-cols-2 gap-2">
           <button
             aria-pressed={templateListView === "default"}
-            className={`min-h-11 min-w-0 rounded-lg px-3 text-sm font-semibold ${
+            className={`min-h-9 min-w-0 rounded-lg px-2.5 text-sm font-semibold ${
               templateListView === "default"
                 ? "bg-white text-slate-950"
                 : "bg-white/10 text-slate-300 hover:bg-white/15 hover:text-white"
@@ -173,7 +176,7 @@ export function ChatSidebar({
           </button>
           <button
             aria-pressed={templateListView === "mine"}
-            className={`min-h-11 min-w-0 rounded-lg px-3 text-sm font-semibold ${
+            className={`min-h-9 min-w-0 rounded-lg px-2.5 text-sm font-semibold ${
               templateListView === "mine"
                 ? "bg-white text-slate-950"
                 : "bg-white/10 text-slate-300 hover:bg-white/15 hover:text-white"
@@ -184,13 +187,13 @@ export function ChatSidebar({
             我的
           </button>
         </div>
-        <div className="min-h-0 min-w-0 overflow-x-hidden overflow-y-auto pr-1" data-template-scroll>
+        <div className="min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto pr-1" data-template-scroll>
           {templateListView === "default" ? (
             <div className="grid min-w-0 gap-2">
               {categories.map((category) => (
                 <button
                   aria-label={`打开模板分类 ${category.name}`}
-                  className="min-h-11 min-w-0 w-full overflow-hidden rounded-lg px-3 py-2 text-left text-sm font-semibold text-slate-300 hover:bg-white/10 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300"
+                  className="min-h-10 min-w-0 w-full overflow-hidden rounded-lg px-2.5 py-1.5 text-left text-sm font-semibold text-slate-300 hover:bg-white/10 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300"
                   key={category.id}
                   onClick={() =>
                     onOpenTemplates({
@@ -214,14 +217,14 @@ export function ChatSidebar({
           ) : (
             <div className="grid min-w-0 gap-2">
               {mineTemplates.length === 0 ? (
-                <p className="m-0 min-w-0 truncate overflow-hidden rounded-lg bg-white/5 px-3 py-4 text-sm text-slate-400">
+                <p className="m-0 min-w-0 truncate overflow-hidden rounded-lg bg-white/5 px-3 py-3 text-sm text-slate-400">
                   暂无我的模板
                 </p>
               ) : null}
               {mineTemplates.map((template) => (
                 <button
                   aria-label={`打开我的模板 ${template.title}`}
-                  className="min-h-11 min-w-0 w-full overflow-hidden rounded-lg px-3 py-2 text-left text-sm font-semibold text-slate-300 hover:bg-white/10 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300"
+                  className="min-h-10 min-w-0 w-full overflow-hidden rounded-lg px-2.5 py-1.5 text-left text-sm font-semibold text-slate-300 hover:bg-white/10 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300"
                   key={template.id}
                   onClick={() =>
                     onOpenTemplates({
@@ -243,9 +246,9 @@ export function ChatSidebar({
         </div>
       </section>
 
-      <section className="mt-5 shrink-0 border-t border-white/10 pt-4">
+      <section className="mt-4 shrink-0 border-t border-white/10 pt-3">
         <p className="m-0 truncate text-sm font-semibold text-white">{userLabel}</p>
-        <div className="mt-3 h-2 overflow-hidden rounded-full bg-white/10">
+        <div className="mt-2 h-2 overflow-hidden rounded-full bg-white/10">
           <div
             className="h-full rounded-full bg-indigo-400"
             style={{ width: `${usagePercent(usageText)}%` }}
@@ -254,7 +257,7 @@ export function ChatSidebar({
         <p className="m-0 mt-2 text-xs text-slate-400">{usageText || "今日尚未生成"}</p>
         <form action="/auth/logout" method="post">
           <button
-            className="mt-3 min-h-11 w-full rounded-lg border border-white/10 px-3 text-sm font-semibold text-slate-200 hover:bg-white/10"
+            className="mt-3 min-h-9 w-full rounded-lg border border-white/10 px-3 text-sm font-semibold text-slate-200 hover:bg-white/10"
             type="submit"
           >
             退出

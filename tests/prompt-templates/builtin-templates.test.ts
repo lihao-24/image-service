@@ -2,18 +2,19 @@ import { describe, expect, it } from "vitest";
 import { BUILTIN_PROMPT_TEMPLATES, PROMPT_TEMPLATE_CATEGORIES } from "@/lib/prompt-templates";
 
 const EXPECTED_CATEGORIES = [
-  ["ecommerce-product", "电商产品"],
-  ["social-cover", "社媒封面"],
-  ["live-commerce", "直播带货"],
-  ["poster-typography", "海报字体"],
-  ["photoreal", "摄影写实"],
-  ["character", "人物角色"],
-  ["illustration-art", "插画艺术"],
-  ["infographic", "信息图表"],
-  ["brand-visual", "品牌视觉"],
-  ["scene-story", "场景叙事"],
-  ["guochao-history", "古风国潮"],
-  ["document-publishing", "文档出版"]
+  ["ui-interface", "UI与界面"],
+  ["infographic", "图表与信息可视化"],
+  ["poster-typography", "海报与排版"],
+  ["ecommerce-product", "商品与电商"],
+  ["brand-logo", "品牌与标志"],
+  ["architecture-space", "建筑与空间"],
+  ["photoreal", "摄影与写实"],
+  ["illustration-art", "插画与艺术"],
+  ["character", "人物与角色"],
+  ["scene-story", "场景与叙事"],
+  ["history-guofeng", "历史与古风题材"],
+  ["document-publishing", "文档与出版物"],
+  ["other-scenarios", "其他应用场景"]
 ] as const;
 
 const ALLOWED_SIZES = ["1024x1024", "1024x1536", "1536x1024"];
@@ -21,8 +22,8 @@ const ALLOWED_QUALITIES = ["high", "medium", "low"];
 const ALLOWED_OUTPUT_FORMATS = ["png", "jpeg", "webp"];
 
 describe("内置提示词模板", () => {
-  it("提供 12 个稳定中文分类", () => {
-    expect(PROMPT_TEMPLATE_CATEGORIES).toHaveLength(12);
+  it("提供 awesome-gpt-image-2 gallery 的 13 个中文分类", () => {
+    expect(PROMPT_TEMPLATE_CATEGORIES).toHaveLength(13);
     expect(PROMPT_TEMPLATE_CATEGORIES.map((category) => [category.id, category.name])).toEqual(
       EXPECTED_CATEGORIES
     );
@@ -41,6 +42,23 @@ describe("内置提示词模板", () => {
         true
       );
     }
+  });
+
+  it("从 awesome-gpt-image-2 gallery 归纳批量扩充各分类模板", () => {
+    expect(BUILTIN_PROMPT_TEMPLATES.length).toBeGreaterThanOrEqual(45);
+
+    for (const [categoryId] of EXPECTED_CATEGORIES) {
+      const templates = BUILTIN_PROMPT_TEMPLATES.filter(
+        (template) => template.category === categoryId
+      );
+      expect(templates.length).toBeGreaterThanOrEqual(3);
+    }
+
+    expect(
+      BUILTIN_PROMPT_TEMPLATES.some((template) =>
+        template.source.referenceUrl?.includes("/docs/gallery")
+      )
+    ).toBe(true);
   });
 
   it("模板字段完整，推荐参数只使用 MVP allowlist 范围", () => {
@@ -62,6 +80,20 @@ describe("内置提示词模板", () => {
       expect(template.source.name).toBeTruthy();
       expect(template.source.note).toMatch(/中文|改写|原创|参考/);
       expect(template.source.referenceUrl).toMatch(/^https:\/\/github\.com\/freestylefly\/awesome-gpt-image-2/);
+    }
+  });
+
+  it("提供足够的图生图模板，且图生图模板必须要求单张参考图", () => {
+    const imageEditTemplates = BUILTIN_PROMPT_TEMPLATES.filter(
+      (template) => template.mode === "image-edit"
+    );
+    const imageEditCategories = new Set(imageEditTemplates.map((template) => template.category));
+
+    expect(imageEditTemplates.length).toBeGreaterThanOrEqual(15);
+    expect(imageEditCategories.size).toBeGreaterThanOrEqual(10);
+
+    for (const template of imageEditTemplates) {
+      expect(template.recommended.referenceMode).toBe("single-image");
     }
   });
 
