@@ -2,6 +2,7 @@
 node_modules/
 coverage/
 dist/
+.playwright-cli/
 
 .env
 .env.production
