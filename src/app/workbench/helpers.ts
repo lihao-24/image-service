@@ -29,11 +29,17 @@ export function createId(prefix: string) {
 }
 
 export function formatUsage(usage?: DailyUsage): string {
-  if (!usage?.generation_count || !usage.limit) {
-    return "";
+  const count = usage?.generation_count ?? 0;
+
+  if (!usage?.limited) {
+    return count > 0 ? `今日生成 ${count} 次 · 不限额` : "";
   }
 
-  return `今日用量 ${usage.generation_count}/${usage.limit}`;
+  if (!usage.limit) {
+    return count > 0 ? `今日生成 ${count} 次` : "";
+  }
+
+  return `今日额度 ${count}/${usage.limit}`;
 }
 
 export function usagePercent(usageText: string): number {
@@ -56,6 +62,10 @@ export function createDefaultRecipeTitle(prompt: string): string {
 }
 
 export function parseAspectRatio(size: string): string {
+  if (/^\d+:\d+$/.test(size)) {
+    return size.replace(":", " / ");
+  }
+
   const [width, height] = size.split("x").map((part) => Number(part));
   if (!width || !height) {
     return "1 / 1";
@@ -188,8 +198,11 @@ export function readTemplateParams(
       provider: fallback.provider,
       model: template.recommended.model,
       size: template.recommended.size,
+      resolution: fallback.resolution,
       quality: template.recommended.quality,
-      outputFormat: template.recommended.output_format
+      outputFormat: template.recommended.output_format,
+      background: fallback.background,
+      moderation: fallback.moderation
     };
   }
 
@@ -197,8 +210,11 @@ export function readTemplateParams(
     provider: template.provider || fallback.provider,
     model: template.model,
     size: template.size,
+    resolution: fallback.resolution,
     quality: template.quality,
-    outputFormat: template.output_format
+    outputFormat: template.output_format,
+    background: fallback.background,
+    moderation: fallback.moderation
   };
 }
 
@@ -232,4 +248,54 @@ export function updateBuiltinFavorite(
 
 export function isMineTemplate(template: TemplateRecord): template is MineTemplateRecord {
   return template.source === "mine";
+}
+
+export async function compressReferenceImageForUpload(file: File): Promise<File> {
+  if (!file.type.startsWith("image/")) {
+    return file;
+  }
+
+  try {
+    const image = await createImageBitmap(file);
+    const maxSide = 2048;
+    const scale = Math.min(1, maxSide / Math.max(image.width, image.height));
+
+    if (scale === 1 && file.size <= 2 * 1024 * 1024) {
+      image.close();
+      return file;
+    }
+
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.round(image.width * scale));
+    canvas.height = Math.max(1, Math.round(image.height * scale));
+    const context = canvas.getContext("2d");
+
+    if (!context) {
+      image.close();
+      return file;
+    }
+
+    context.drawImage(image, 0, 0, canvas.width, canvas.height);
+    image.close();
+
+    const blob = await new Promise<Blob | null>((resolve) =>
+      canvas.toBlob(resolve, "image/jpeg", 0.9)
+    );
+
+    if (!blob || blob.size >= file.size) {
+      return file;
+    }
+
+    return new File([blob], replaceExtension(file.name || "reference-image", "jpg"), {
+      type: "image/jpeg"
+    });
+  } catch {
+    return file;
+  }
+}
+
+function replaceExtension(filename: string, extension: string): string {
+  const normalizedExtension = extension.startsWith(".") ? extension.slice(1) : extension;
+  const baseName = filename.replace(/\.[^.]*$/, "");
+  return `${baseName || "reference-image"}.${normalizedExtension}`;
 }

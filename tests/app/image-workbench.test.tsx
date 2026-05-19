@@ -3,15 +3,19 @@ import React from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import ImageWorkbench from "@/app/image-workbench";
+import { formatUsage, usagePercent } from "@/app/workbench/helpers";
 import type { PublicImageConfig } from "@/lib/config";
 
 const publicConfig: PublicImageConfig = {
   defaultProvider: "sub2api",
   defaults: {
     model: "gpt-image-2",
-    size: "1024x1536",
-    quality: "high",
-    outputFormat: "png"
+    size: "auto",
+    resolution: "auto",
+    quality: "auto",
+    outputFormat: "png",
+    background: "auto",
+    moderation: "auto"
   },
   providers: [
     {
@@ -21,9 +25,12 @@ const publicConfig: PublicImageConfig = {
     }
   ],
   options: {
-    sizes: ["1024x1024", "1024x1536", "1536x1024"],
-    qualities: ["high", "medium"],
-    outputFormats: ["png", "webp"]
+    sizes: ["auto", "1:1", "3:2", "2:3", "16:9", "9:16"],
+    resolutions: ["auto", "standard", "hd", "4k"],
+    qualities: ["auto", "low", "medium", "high"],
+    outputFormats: ["png", "jpeg", "webp"],
+    backgrounds: ["auto", "opaque"],
+    moderations: ["auto", "low"]
   }
 };
 
@@ -40,7 +47,7 @@ const ecommerceTemplate = {
   mode: "text-to-image",
   recommended: {
     model: "gpt-image-2",
-    size: "1024x1536",
+    size: "2:3",
     quality: "high",
     output_format: "png",
     reference_mode: "none"
@@ -83,7 +90,7 @@ const infographicTemplate = {
   mode: "text-to-image",
   recommended: {
     model: "gpt-image-2",
-    size: "1536x1024",
+    size: "3:2",
     quality: "high",
     output_format: "png",
     reference_mode: "none"
@@ -119,7 +126,7 @@ const mineTemplate = {
   mode: "text-to-image",
   provider: "sub2api",
   model: "gpt-image-2",
-  size: "1024x1536",
+  size: "2:3",
   quality: "medium",
   output_format: "webp",
   prompt: "透明玻璃杯，产品摄影，浅色背景",
@@ -159,6 +166,20 @@ afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
+});
+
+describe("workbench usage helpers", () => {
+  it("格式化无限额和受限用量文案", () => {
+    expect(formatUsage({ generation_count: 12, limit: null, limited: false })).toBe(
+      "今日生成 12 次 · 不限额"
+    );
+    expect(formatUsage({ generation_count: 3, limit: 20, limited: true })).toBe(
+      "今日额度 3/20"
+    );
+    expect(formatUsage({ generation_count: 0, limit: null, limited: false })).toBe("");
+    expect(usagePercent("今日生成 12 次 · 不限额")).toBe(0);
+    expect(usagePercent("今日额度 3/20")).toBe(15);
+  });
 });
 
 describe("ImageWorkbench chat canvas", () => {
@@ -209,22 +230,59 @@ describe("ImageWorkbench chat canvas", () => {
     });
   });
 
-  it("侧边栏设置区默认只展示尺寸，展开后展示完整参数", async () => {
+  it("侧边栏设置区默认只展示画面比例，展开后展示中文参数控件", async () => {
     mockFetchByRoute();
 
     renderWorkbench();
     const sidebar = await screen.findByRole("complementary", { name: "工作台侧边栏" });
 
-    expect(within(sidebar).getByLabelText("尺寸")).toBeTruthy();
+    const sizeSelect = within(sidebar).getByLabelText("画面比例") as HTMLSelectElement;
+    expect(sizeSelect).toBeTruthy();
+    expect(optionLabels(sizeSelect)).toEqual([
+      "自动",
+      "方图 1:1",
+      "横图 3:2",
+      "竖图 2:3",
+      "宽屏 16:9",
+      "竖屏 9:16"
+    ]);
     expect(within(sidebar).queryByLabelText("Model")).toBeNull();
-    expect(within(sidebar).queryByLabelText("质量")).toBeNull();
+    expect(within(sidebar).queryByLabelText("画质")).toBeNull();
     expect(within(sidebar).queryByLabelText("输出格式")).toBeNull();
+    expect(within(sidebar).queryByLabelText("背景")).toBeNull();
+    expect(within(sidebar).queryByLabelText("安全审核")).toBeNull();
 
     fireEvent.click(within(sidebar).getByRole("button", { name: "展开设置" }));
 
     expect(within(sidebar).getByLabelText("Model")).toBeTruthy();
-    expect(within(sidebar).getByLabelText("质量")).toBeTruthy();
-    expect(within(sidebar).getByLabelText("输出格式")).toBeTruthy();
+    expect(optionLabels(within(sidebar).getByLabelText("分辨率") as HTMLSelectElement)).toEqual([
+      "自动"
+    ]);
+    fireEvent.change(sizeSelect, { target: { value: "16:9" } });
+    expect(optionLabels(within(sidebar).getByLabelText("分辨率") as HTMLSelectElement)).toEqual([
+      "标准",
+      "高清",
+      "4K"
+    ]);
+    expect(optionLabels(within(sidebar).getByLabelText("画质") as HTMLSelectElement)).toEqual([
+      "自动",
+      "草稿",
+      "标准",
+      "高质量"
+    ]);
+    expect(optionLabels(within(sidebar).getByLabelText("输出格式") as HTMLSelectElement)).toEqual([
+      "PNG",
+      "JPEG",
+      "WebP"
+    ]);
+    expect(optionLabels(within(sidebar).getByLabelText("背景") as HTMLSelectElement)).toEqual([
+      "自动",
+      "不透明"
+    ]);
+    expect(optionLabels(within(sidebar).getByLabelText("安全审核") as HTMLSelectElement)).toEqual([
+      "自动",
+      "宽松"
+    ]);
   });
 
   it("移动端侧边栏使用 drawer 语义，遮罩和关闭按钮可关闭", async () => {
@@ -312,9 +370,12 @@ describe("ImageWorkbench chat canvas", () => {
 
     renderWorkbench();
     fireEvent.click(await screen.findByRole("button", { name: "展开设置" }));
-    fireEvent.change(screen.getByLabelText("尺寸"), { target: { value: "1536x1024" } });
-    fireEvent.change(screen.getByLabelText("质量"), { target: { value: "medium" } });
+    fireEvent.change(screen.getByLabelText("画面比例"), { target: { value: "16:9" } });
+    fireEvent.change(screen.getByLabelText("分辨率"), { target: { value: "hd" } });
+    fireEvent.change(screen.getByLabelText("画质"), { target: { value: "medium" } });
     fireEvent.change(screen.getByLabelText("输出格式"), { target: { value: "webp" } });
+    fireEvent.change(screen.getByLabelText("背景"), { target: { value: "opaque" } });
+    fireEvent.change(screen.getByLabelText("安全审核"), { target: { value: "low" } });
     fireEvent.change(screen.getByLabelText("Prompt"), {
       target: { value: "横版社媒封面，蓝色玻璃质感" }
     });
@@ -327,9 +388,12 @@ describe("ImageWorkbench chat canvas", () => {
     expect((screen.getByLabelText("Prompt") as HTMLTextAreaElement).value).toBe(
       "横版社媒封面，蓝色玻璃质感"
     );
-    expect((screen.getByLabelText("尺寸") as HTMLSelectElement).value).toBe("1536x1024");
-    expect((screen.getByLabelText("质量") as HTMLSelectElement).value).toBe("medium");
+    expect((screen.getByLabelText("画面比例") as HTMLSelectElement).value).toBe("16:9");
+    expect((screen.getByLabelText("分辨率") as HTMLSelectElement).value).toBe("hd");
+    expect((screen.getByLabelText("画质") as HTMLSelectElement).value).toBe("medium");
     expect((screen.getByLabelText("输出格式") as HTMLSelectElement).value).toBe("webp");
+    expect((screen.getByLabelText("背景") as HTMLSelectElement).value).toBe("opaque");
+    expect((screen.getByLabelText("安全审核") as HTMLSelectElement).value).toBe("low");
   });
 
   it("图生图消息编辑提示重新选择参考图，不回填 File", async () => {
@@ -357,6 +421,30 @@ describe("ImageWorkbench chat canvas", () => {
 
     expect(await screen.findByText("参考图需要重新选择。")).toBeTruthy();
     expect((screen.getByLabelText("参考图文件") as HTMLInputElement).files?.length ?? 0).toBe(0);
+  });
+
+  it("初始拉取今日用量并可打开用量弹窗", async () => {
+    mockFetchByRoute({
+      usageResponse: {
+        usage: {
+          date: "2026-05-19",
+          generation_count: 2,
+          limit: null,
+          limited: false
+        }
+      }
+    });
+
+    renderWorkbench();
+
+    expect(await screen.findByText("今日生成 2 次 · 不限额")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "查看今日用量" }));
+
+    expect(screen.getByRole("dialog", { name: "今日用量" })).toBeTruthy();
+    expect(screen.getByText("GPT Image 系列当前仅统计用量，不做每日额度拦截。")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "关闭" }));
+    expect(screen.queryByRole("dialog", { name: "今日用量" })).toBeNull();
   });
 
   it("模板分类入口打开 Modal，使用模板写入输入框且不调用生成 API", async () => {
@@ -499,8 +587,12 @@ describe("ImageWorkbench chat canvas", () => {
 
     renderWorkbench();
     fireEvent.click(await screen.findByRole("button", { name: "展开设置" }));
-    fireEvent.change(screen.getByLabelText("尺寸"), { target: { value: "1536x1024" } });
-    fireEvent.change(screen.getByLabelText("质量"), { target: { value: "medium" } });
+    fireEvent.change(screen.getByLabelText("画面比例"), { target: { value: "16:9" } });
+    fireEvent.change(screen.getByLabelText("分辨率"), { target: { value: "hd" } });
+    fireEvent.change(screen.getByLabelText("画质"), { target: { value: "medium" } });
+    fireEvent.change(screen.getByLabelText("输出格式"), { target: { value: "webp" } });
+    fireEvent.change(screen.getByLabelText("背景"), { target: { value: "opaque" } });
+    fireEvent.change(screen.getByLabelText("安全审核"), { target: { value: "low" } });
     fireEvent.change(screen.getByLabelText("Prompt"), {
       target: { value: "横版社媒封面，蓝色玻璃质感" }
     });
@@ -518,9 +610,70 @@ describe("ImageWorkbench chat canvas", () => {
     const body = JSON.parse(String(generationCalls(fetchMock)[1][1]?.body));
     expect(body).toMatchObject({
       prompt: "横版社媒封面，蓝色玻璃质感",
-      size: "1536x1024",
-      quality: "medium"
+      size: "16:9",
+      resolution: "hd",
+      quality: "medium",
+      output_format: "webp",
+      background: "opaque",
+      moderation: "low"
     });
+  });
+
+  it("图生图提交前压缩参考图但预览仍使用原始文件 URL", async () => {
+    const fetchMock = mockFetchByRoute();
+    const originalCreateElement = document.createElement.bind(document);
+    const drawImage = vi.fn();
+    const close = vi.fn();
+    vi.stubGlobal(
+      "createImageBitmap",
+      vi.fn(async () => ({
+        width: 4096,
+        height: 2048,
+        close
+      }))
+    );
+    vi.spyOn(document, "createElement").mockImplementation((tagName: string) => {
+      if (tagName === "canvas") {
+        return {
+          width: 0,
+          height: 0,
+          getContext: () => ({ drawImage }),
+          toBlob: (callback: BlobCallback) =>
+            callback(new Blob(["compressed-reference"], { type: "image/jpeg" }))
+        } as HTMLCanvasElement;
+      }
+
+      return originalCreateElement(tagName);
+    });
+
+    renderWorkbench();
+    fireEvent.click(screen.getAllByRole("button", { name: "图生图" }).at(-1)!);
+    const originalFile = new File([new Uint8Array(5 * 1024 * 1024)], "reference.png", {
+      type: "image/png"
+    });
+    fireEvent.change(screen.getByLabelText("参考图文件"), {
+      target: { files: [originalFile] }
+    });
+    fireEvent.change(screen.getByLabelText("Prompt"), {
+      target: { value: "保留构图，改成清晨窗边光线" }
+    });
+    fireEvent.click(screen.getByRole("button", { name: "生成图片" }));
+
+    await screen.findByRole("img", { name: "AI 生成图片" });
+    const editBody = fetchMock.mock.calls.find(([url]) => url === "/api/images/edits")?.[1]
+      ?.body as FormData;
+    const uploadedFile = editBody.get("image") as File;
+
+    expect(createImageBitmap).toHaveBeenCalledWith(originalFile);
+    expect(drawImage).toHaveBeenCalled();
+    expect(close).toHaveBeenCalled();
+    expect(uploadedFile).toBeInstanceOf(File);
+    expect(uploadedFile.name).toBe("reference.jpg");
+    expect(uploadedFile.type).toBe("image/jpeg");
+    expect(uploadedFile).not.toBe(originalFile);
+    expect(screen.getByRole("img", { name: "参考图缩略图" }).getAttribute("src")).toBe(
+      "blob:reference-preview"
+    );
   });
 
   it("AI 图片消息保存配置打开 Modal，recipe 请求不包含图片、base64 或参考图", async () => {
@@ -552,8 +705,8 @@ describe("ImageWorkbench chat canvas", () => {
       mode: "text-to-image",
       provider: "sub2api",
       model: "gpt-image-2",
-      size: "1024x1536",
-      quality: "high",
+      size: "auto",
+      quality: "auto",
       output_format: "png",
       reference_mode: null
     });
@@ -581,6 +734,7 @@ describe("ImageWorkbench chat canvas", () => {
 type MockFetchOptions = {
   initialLibrary?: unknown;
   afterSaveLibrary?: unknown;
+  usageResponse?: unknown;
   generationResponse?: Promise<Response>;
   editResponse?: Promise<Response>;
 };
@@ -608,6 +762,16 @@ function mockFetchByRoute(options: MockFetchOptions = {}) {
       return Promise.resolve(jsonResponse(libraryCalls === 1 ? initialLibrary : afterSaveLibrary));
     }
 
+    if (url === "/api/usage") {
+      return Promise.resolve(
+        jsonResponse(
+          options.usageResponse ?? {
+            usage: { date: "2026-05-19", generation_count: 0, limit: null, limited: false }
+          }
+        )
+      );
+    }
+
     if (url === "/api/images/generations") {
       return options.generationResponse ?? Promise.resolve(successGenerationResponse());
     }
@@ -618,7 +782,7 @@ function mockFetchByRoute(options: MockFetchOptions = {}) {
         Promise.resolve(
           jsonResponse({
             image: { b64_json: tinyPng, output_format: "webp" },
-            meta: { daily_usage: { generation_count: 1, limit: 20 } }
+            meta: { daily_usage: { generation_count: 1, limit: null, limited: false } }
           })
         )
       );
@@ -662,7 +826,7 @@ function createTemplateLibraryResponse(
 function successGenerationResponse(): Response {
   return jsonResponse({
     image: { b64_json: tinyPng, output_format: "png" },
-    meta: { daily_usage: { generation_count: 1, limit: 20 } }
+    meta: { daily_usage: { generation_count: 1, limit: null, limited: false } }
   });
 }
 
@@ -681,4 +845,8 @@ function createDeferred<T>() {
     reject = promiseReject;
   });
   return { promise, resolve, reject };
+}
+
+function optionLabels(select: HTMLSelectElement): string[] {
+  return Array.from(select.options).map((option) => option.textContent ?? "");
 }

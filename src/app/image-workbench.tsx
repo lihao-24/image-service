@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useSyncExternalStore, useState } from "reac
 import type { PublicImageConfig } from "@/lib/config";
 import { ChatSidebar } from "./workbench/chat-sidebar";
 import {
+  compressReferenceImageForUpload,
   createId,
   formatUsage,
   readSafeErrorMessage,
@@ -58,8 +59,11 @@ export default function ImageWorkbench({ config, userLabel }: ImageWorkbenchProp
     provider: providerId,
     model: config.defaults.model,
     size: config.defaults.size,
+    resolution: config.defaults.resolution ?? "auto",
     quality: config.defaults.quality,
-    outputFormat: config.defaults.outputFormat
+    outputFormat: config.defaults.outputFormat,
+    background: config.defaults.background ?? "auto",
+    moderation: config.defaults.moderation ?? "auto"
   });
   const [mode, setMode] = useState<GenerationMode>("text-to-image");
   const [prompt, setPrompt] = useState("");
@@ -82,6 +86,7 @@ export default function ImageWorkbench({ config, userLabel }: ImageWorkbenchProp
 
   useEffect(() => {
     void loadTemplateLibrary();
+    void loadUsage();
   }, []);
 
   useEffect(() => {
@@ -122,6 +127,19 @@ export default function ImageWorkbench({ config, userLabel }: ImageWorkbenchProp
     }
   }
 
+  async function loadUsage() {
+    try {
+      const response = await fetch("/api/usage");
+      const payload = (await response.json().catch(() => ({}))) as { usage?: DailyUsage };
+
+      if (response.ok) {
+        setUsageText(formatUsage(payload.usage));
+      }
+    } catch {
+      setUsageText("");
+    }
+  }
+
   function updateParams(nextParams: Partial<GenerationParamsSnapshot>) {
     setParams((current) => ({ ...current, ...nextParams, provider: providerId }));
   }
@@ -135,8 +153,11 @@ export default function ImageWorkbench({ config, userLabel }: ImageWorkbenchProp
     updateParams({
       model: payload.params.model,
       size: payload.params.size,
+      resolution: payload.params.resolution,
       quality: payload.params.quality,
-      outputFormat: payload.params.outputFormat
+      outputFormat: payload.params.outputFormat,
+      background: payload.params.background,
+      moderation: payload.params.moderation
     });
     setMode(payload.mode);
   }
@@ -314,8 +335,11 @@ export default function ImageWorkbench({ config, userLabel }: ImageWorkbenchProp
       model: generationParams.model,
       prompt: promptText,
       size: generationParams.size,
+      resolution: generationParams.resolution ?? "auto",
       quality: generationParams.quality,
-      output_format: generationParams.outputFormat
+      output_format: generationParams.outputFormat,
+      background: generationParams.background ?? "auto",
+      moderation: generationParams.moderation ?? "auto"
     };
 
     if (generationMode === "text-to-image") {
@@ -331,7 +355,7 @@ export default function ImageWorkbench({ config, userLabel }: ImageWorkbenchProp
       formData.set(key, value);
     });
     if (generationReference) {
-      formData.set("image", generationReference);
+      formData.set("image", await compressReferenceImageForUpload(generationReference));
     }
 
     return fetch("/api/images/edits", {
@@ -393,8 +417,11 @@ export default function ImageWorkbench({ config, userLabel }: ImageWorkbenchProp
           provider: saveTarget.params.provider,
           model: saveTarget.params.model,
           size: saveTarget.params.size,
+          resolution: saveTarget.params.resolution,
           quality: saveTarget.params.quality,
           output_format: saveTarget.params.outputFormat,
+          background: saveTarget.params.background,
+          moderation: saveTarget.params.moderation,
           reference_mode: saveTarget.mode === "image-edit" ? "single-image" : null
         })
       });

@@ -8,8 +8,11 @@ export type GenerationParamsSnapshot = {
   provider: string;
   model: string;
   size: string;
+  resolution?: string;
   quality: string;
   outputFormat: string;
+  background?: string;
+  moderation?: string;
 };
 
 export type TemporaryImage = {
@@ -118,6 +121,8 @@ export type TemplateLibrary = {
 };
 
 export type DailyUsage = {
+  date?: string;
   generation_count?: number;
-  limit?: number;
+  limit?: number | null;
+  limited?: boolean;
 };

@@ -26,6 +26,55 @@ type ChatSidebarProps = {
 };
 
 type TemplateListView = "default" | "mine";
+type OptionLabels = Record<string, string>;
+
+const SIZE_LABELS: OptionLabels = {
+  auto: "自动",
+  "1:1": "方图 1:1",
+  "3:2": "横图 3:2",
+  "2:3": "竖图 2:3",
+  "16:9": "宽屏 16:9",
+  "9:16": "竖屏 9:16"
+};
+
+const RESOLUTION_LABELS: OptionLabels = {
+  auto: "自动",
+  standard: "标准",
+  hd: "高清",
+  "4k": "4K"
+};
+
+const QUALITY_LABELS: OptionLabels = {
+  auto: "自动",
+  low: "草稿",
+  medium: "标准",
+  high: "高质量"
+};
+
+const OUTPUT_FORMAT_LABELS: OptionLabels = {
+  png: "PNG",
+  jpeg: "JPEG",
+  webp: "WebP"
+};
+
+const BACKGROUND_LABELS: OptionLabels = {
+  auto: "自动",
+  opaque: "不透明"
+};
+
+const MODERATION_LABELS: OptionLabels = {
+  auto: "自动",
+  low: "宽松"
+};
+
+const RESOLUTIONS_BY_SIZE: Record<string, string[]> = {
+  auto: ["auto"],
+  "1:1": ["standard", "hd"],
+  "3:2": ["standard", "hd"],
+  "2:3": ["standard", "hd"],
+  "16:9": ["standard", "hd", "4k"],
+  "9:16": ["standard", "hd", "4k"]
+};
 
 export function ChatSidebar({
   className = "flex h-full w-[280px] shrink-0 flex-col overflow-hidden bg-slate-950 px-4 py-4 text-slate-100 shadow-2xl",
@@ -43,6 +92,11 @@ export function ChatSidebar({
   onClose
 }: ChatSidebarProps) {
   const [templateListView, setTemplateListView] = useState<TemplateListView>("default");
+  const [usageOpen, setUsageOpen] = useState(false);
+  const resolutionOptions = readResolutionOptions(params.size, config.options.resolutions);
+  const selectedResolution = resolutionOptions.includes(params.resolution ?? "")
+    ? (params.resolution ?? "auto")
+    : resolutionOptions[0] ?? "auto";
 
   return (
     <aside
@@ -103,16 +157,24 @@ export function ChatSidebar({
           ) : null}
 
           <label className="grid gap-1.5 text-sm font-semibold text-slate-300">
-            <span>尺寸</span>
+            <span>画面比例</span>
             <select
-              aria-label="尺寸"
+              aria-label="画面比例"
               className="min-h-10 rounded-lg border border-white/10 bg-slate-900 px-3 text-sm text-white"
-              onChange={(event) => onParamChange({ size: event.target.value })}
+              onChange={(event) =>
+                onParamChange({
+                  size: event.target.value,
+                  resolution: readResolutionOptions(
+                    event.target.value,
+                    config.options.resolutions
+                  )[0]
+                })
+              }
               value={params.size}
             >
               {config.options.sizes.map((item) => (
                 <option key={item} value={item}>
-                  {item}
+                  {SIZE_LABELS[item] ?? item}
                 </option>
               ))}
             </select>
@@ -121,16 +183,32 @@ export function ChatSidebar({
           {settingsExpanded ? (
             <>
               <label className="grid gap-1.5 text-sm font-semibold text-slate-300">
-                <span>质量</span>
+                <span>分辨率</span>
                 <select
-                  aria-label="质量"
+                  aria-label="分辨率"
+                  className="min-h-10 rounded-lg border border-white/10 bg-slate-900 px-3 text-sm text-white"
+                  onChange={(event) => onParamChange({ resolution: event.target.value })}
+                  value={selectedResolution}
+                >
+                  {resolutionOptions.map((item) => (
+                    <option key={item} value={item}>
+                      {RESOLUTION_LABELS[item] ?? item}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="grid gap-1.5 text-sm font-semibold text-slate-300">
+                <span>画质</span>
+                <select
+                  aria-label="画质"
                   className="min-h-10 rounded-lg border border-white/10 bg-slate-900 px-3 text-sm text-white"
                   onChange={(event) => onParamChange({ quality: event.target.value })}
                   value={params.quality}
                 >
                   {config.options.qualities.map((item) => (
                     <option key={item} value={item}>
-                      {item}
+                      {QUALITY_LABELS[item] ?? item}
                     </option>
                   ))}
                 </select>
@@ -146,7 +224,39 @@ export function ChatSidebar({
                 >
                   {config.options.outputFormats.map((item) => (
                     <option key={item} value={item}>
-                      {item}
+                      {OUTPUT_FORMAT_LABELS[item] ?? item}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="grid gap-1.5 text-sm font-semibold text-slate-300">
+                <span>背景</span>
+                <select
+                  aria-label="背景"
+                  className="min-h-10 rounded-lg border border-white/10 bg-slate-900 px-3 text-sm text-white"
+                  onChange={(event) => onParamChange({ background: event.target.value })}
+                  value={params.background ?? "auto"}
+                >
+                  {(config.options.backgrounds ?? ["auto", "opaque"]).map((item) => (
+                    <option key={item} value={item}>
+                      {BACKGROUND_LABELS[item] ?? item}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="grid gap-1.5 text-sm font-semibold text-slate-300">
+                <span>安全审核</span>
+                <select
+                  aria-label="安全审核"
+                  className="min-h-10 rounded-lg border border-white/10 bg-slate-900 px-3 text-sm text-white"
+                  onChange={(event) => onParamChange({ moderation: event.target.value })}
+                  value={params.moderation ?? "auto"}
+                >
+                  {(config.options.moderations ?? ["auto", "low"]).map((item) => (
+                    <option key={item} value={item}>
+                      {MODERATION_LABELS[item] ?? item}
                     </option>
                   ))}
                 </select>
@@ -248,13 +358,22 @@ export function ChatSidebar({
 
       <section className="mt-4 shrink-0 border-t border-white/10 pt-3">
         <p className="m-0 truncate text-sm font-semibold text-white">{userLabel}</p>
-        <div className="mt-2 h-2 overflow-hidden rounded-full bg-white/10">
-          <div
-            className="h-full rounded-full bg-indigo-400"
-            style={{ width: `${usagePercent(usageText)}%` }}
-          />
-        </div>
-        <p className="m-0 mt-2 text-xs text-slate-400">{usageText || "今日尚未生成"}</p>
+        <button
+          aria-label="查看今日用量"
+          className="mt-2 block w-full rounded-lg p-0 text-left hover:bg-white/5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300"
+          onClick={() => setUsageOpen(true)}
+          type="button"
+        >
+          <span className="block h-2 overflow-hidden rounded-full bg-white/10">
+            <span
+              className="block h-full rounded-full bg-indigo-400"
+              style={{ width: `${usagePercent(usageText)}%` }}
+            />
+          </span>
+          <span className="mt-2 block truncate text-xs text-slate-400">
+            {usageText || "今日尚未生成"}
+          </span>
+        </button>
         <form action="/auth/logout" method="post">
           <button
             className="mt-3 min-h-9 w-full rounded-lg border border-white/10 px-3 text-sm font-semibold text-slate-200 hover:bg-white/10"
@@ -264,6 +383,40 @@ export function ChatSidebar({
           </button>
         </form>
       </section>
+
+      {usageOpen ? (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/70 px-4">
+          <div
+            aria-label="今日用量"
+            aria-modal="true"
+            className="w-full max-w-sm rounded-lg border border-white/10 bg-slate-950 p-5 text-slate-100 shadow-2xl"
+            role="dialog"
+          >
+            <div className="flex items-center justify-between gap-3">
+              <h2 className="m-0 text-base font-bold text-white">今日用量</h2>
+              <button
+                className="grid h-9 w-9 place-items-center rounded-lg text-slate-300 hover:bg-white/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300"
+                onClick={() => setUsageOpen(false)}
+                type="button"
+              >
+                关闭
+              </button>
+            </div>
+            <p className="m-0 mt-4 text-sm font-semibold text-white">
+              {usageText || "今日尚未生成"}
+            </p>
+            <p className="m-0 mt-3 text-sm leading-6 text-slate-400">
+              GPT Image 系列当前仅统计用量，不做每日额度拦截。
+            </p>
+          </div>
+        </div>
+      ) : null}
     </aside>
   );
+}
+
+function readResolutionOptions(size: string, configuredOptions?: string[]): string[] {
+  const allowed = RESOLUTIONS_BY_SIZE[size] ?? ["auto"];
+  const configured = configuredOptions ?? ["auto", "standard", "hd", "4k"];
+  return allowed.filter((item) => configured.includes(item));
 }
