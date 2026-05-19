@@ -97,9 +97,7 @@ describe("GET /api/usage", () => {
     incrementDailyUsage(currentDb, "client-user", usageDate);
     mockUser("user-a");
 
-    const response = await usageRoute.GET(
-      new Request("http://localhost/api/usage?user_id=client-user")
-    );
+    const response = await usageRoute.GET();
     const body = await response.json();
 
     expect(response.status).toBe(200);
