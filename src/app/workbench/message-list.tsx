@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { parseAspectRatio } from "./helpers";
 import {
   CollapseIcon,
@@ -9,6 +10,11 @@ import {
   SaveIcon
 } from "./icons";
 import type { WorkbenchMessage, WorkbenchUserMessage } from "./types";
+
+type ImagePreview = {
+  alt: string;
+  src: string;
+};
 
 type MessageListProps = {
   messages: WorkbenchMessage[];
@@ -27,6 +33,23 @@ export function MessageList({
   onSaveRecipe,
   onToggleCollapse
 }: MessageListProps) {
+  const [preview, setPreview] = useState<ImagePreview | null>(null);
+
+  useEffect(() => {
+    if (!preview) {
+      return;
+    }
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setPreview(null);
+      }
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [preview]);
+
   if (messages.length === 0) {
     return (
       <section className="mx-auto flex h-full max-w-4xl flex-col items-center justify-center px-5 text-center">
@@ -67,17 +90,22 @@ export function MessageList({
             key={message.id}
             message={message}
             onEdit={() => onEditUserMessage(message)}
+            onPreviewImage={(image) => setPreview(image)}
             onToggle={() => onToggleCollapse(message.id)}
           />
         ) : (
           <AssistantMessage
             key={message.id}
             message={message}
+            onPreviewImage={(image) => setPreview(image)}
             onRegenerate={() => onRegenerate(message.id)}
             onSaveRecipe={() => onSaveRecipe(message.id)}
           />
         )
       )}
+      {preview ? (
+        <ImagePreviewDialog image={preview} onClose={() => setPreview(null)} />
+      ) : null}
     </section>
   );
 }
@@ -85,10 +113,12 @@ export function MessageList({
 function UserMessage({
   message,
   onEdit,
+  onPreviewImage,
   onToggle
 }: {
   message: WorkbenchUserMessage;
   onEdit: () => void;
+  onPreviewImage: (image: ImagePreview) => void;
   onToggle: () => void;
 }) {
   const isLong = message.prompt.length > 140 || message.prompt.split("\n").length > 4;
@@ -99,12 +129,24 @@ function UserMessage({
       <p className="m-0 whitespace-pre-wrap break-words leading-7">{text}</p>
       {message.referencePreviewUrl ? (
         <div className="mt-3 flex items-center gap-3 rounded-lg bg-white/10 p-2">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            alt="参考图缩略图"
-            className="h-14 w-14 rounded-md object-cover"
-            src={message.referencePreviewUrl}
-          />
+          <button
+            aria-label="预览参考图"
+            className="grid h-14 w-14 shrink-0 overflow-hidden rounded-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-200"
+            onClick={() =>
+              onPreviewImage({
+                alt: "参考图预览",
+                src: message.referencePreviewUrl ?? ""
+              })
+            }
+            type="button"
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              alt="参考图缩略图"
+              className="h-full w-full object-cover"
+              src={message.referencePreviewUrl}
+            />
+          </button>
           <span className="truncate text-sm text-slate-200">{message.referenceFileName}</span>
         </div>
       ) : null}
@@ -149,10 +191,12 @@ function UserMessage({
 
 function AssistantMessage({
   message,
+  onPreviewImage,
   onRegenerate,
   onSaveRecipe
 }: {
   message: Extract<WorkbenchMessage, { role: "assistant" }>;
+  onPreviewImage: (image: ImagePreview) => void;
   onRegenerate: () => void;
   onSaveRecipe: () => void;
 }) {
@@ -182,13 +226,20 @@ function AssistantMessage({
 
   return (
     <article className="group mr-auto w-full max-w-[720px]">
-      <div
-        className="overflow-hidden rounded-lg border border-slate-200 bg-slate-100"
+      <button
+        aria-label="预览生成图片"
+        className="block w-full overflow-hidden rounded-lg border border-slate-200 bg-slate-100 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-600"
+        onClick={() => {
+          if (message.image?.src) {
+            onPreviewImage({ alt: "AI 生成图片预览", src: message.image.src });
+          }
+        }}
         style={{ aspectRatio: ratio }}
+        type="button"
       >
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img alt="AI 生成图片" className="h-full w-full object-contain" src={message.image?.src} />
-      </div>
+      </button>
       <div className="mt-3 flex flex-wrap gap-2">
         <a
           aria-label="下载"
@@ -224,5 +275,45 @@ function AssistantMessage({
         </button>
       </div>
     </article>
+  );
+}
+
+function ImagePreviewDialog({
+  image,
+  onClose
+}: {
+  image: ImagePreview;
+  onClose: () => void;
+}) {
+  return (
+    <div
+      aria-label="图片预览"
+      aria-modal="true"
+      className="fixed inset-0 z-50 grid place-items-center bg-slate-950/85 p-4"
+      role="dialog"
+    >
+      <button
+        aria-label="关闭预览背景"
+        className="absolute inset-0 cursor-zoom-out"
+        onClick={onClose}
+        type="button"
+      />
+      <div className="relative z-10 flex max-h-full w-full max-w-6xl flex-col gap-3">
+        <div className="flex justify-end">
+          <button
+            aria-label="关闭预览"
+            className="min-h-10 rounded-lg bg-white px-4 text-sm font-semibold text-slate-950 shadow-sm hover:bg-slate-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300"
+            onClick={onClose}
+            type="button"
+          >
+            关闭
+          </button>
+        </div>
+        <div className="grid max-h-[calc(100dvh-6rem)] place-items-center overflow-hidden rounded-lg bg-slate-900">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img alt={image.alt} className="max-h-[calc(100dvh-6rem)] max-w-full object-contain" src={image.src} />
+        </div>
+      </div>
+    </div>
   );
 }

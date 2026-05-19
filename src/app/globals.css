@@ -40,6 +40,28 @@ a {
   outline-offset: 2px;
 }
 
+.template-scrollbar {
+  scrollbar-color: rgba(148, 163, 184, 0.38) transparent;
+  scrollbar-width: thin;
+}
+
+.template-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+
+.template-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.template-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.32);
+  border-radius: 999px;
+}
+
+.template-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(203, 213, 225, 0.46);
+}
+
 .page-shell {
   min-height: 100vh;
   padding: 48px 24px;

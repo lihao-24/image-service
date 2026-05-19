@@ -297,7 +297,7 @@ export function ChatSidebar({
             我的
           </button>
         </div>
-        <div className="min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto pr-1" data-template-scroll>
+        <div className="template-scrollbar min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto pr-1" data-template-scroll>
           {templateListView === "default" ? (
             <div className="grid min-w-0 gap-2">
               {categories.map((category) => (

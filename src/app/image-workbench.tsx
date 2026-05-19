@@ -149,12 +149,15 @@ export default function ImageWorkbench({ config, userLabel }: ImageWorkbenchProp
     mode: GenerationMode;
     params: GenerationParamsSnapshot;
   }) {
+    const templateSizeAllowed = config.options.sizes.includes(payload.params.size);
     setPrompt(payload.prompt);
     updateParams({
       model: payload.params.model,
-      size: payload.params.size,
+      size: templateSizeAllowed ? payload.params.size : params.size,
       resolution: payload.params.resolution,
-      quality: payload.params.quality,
+      quality: templateSizeAllowed && config.options.qualities.includes(payload.params.quality)
+        ? payload.params.quality
+        : params.quality,
       outputFormat: payload.params.outputFormat,
       background: payload.params.background,
       moderation: payload.params.moderation

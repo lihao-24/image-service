@@ -47,7 +47,7 @@ const ecommerceTemplate = {
   mode: "text-to-image",
   recommended: {
     model: "gpt-image-2",
-    size: "2:3",
+    size: "1024x1536",
     quality: "high",
     output_format: "png",
     reference_mode: "none"
@@ -339,6 +339,27 @@ describe("ImageWorkbench chat canvas", () => {
     expect(screen.getByRole("button", { name: "保存配置" })).toBeTruthy();
   });
 
+  it("点击聊天图片后打开大图预览并可关闭", async () => {
+    mockFetchByRoute();
+
+    renderWorkbench();
+    fireEvent.change(screen.getByLabelText("Prompt"), {
+      target: { value: "一张安静的书桌" }
+    });
+    fireEvent.click(screen.getByRole("button", { name: "生成图片" }));
+
+    const image = await screen.findByRole("img", { name: "AI 生成图片" });
+    fireEvent.click(image);
+
+    const preview = screen.getByRole("dialog", { name: "图片预览" });
+    expect(
+      within(preview).getByRole("img", { name: "AI 生成图片预览" }).getAttribute("src")
+    ).toBe(`data:image/png;base64,${tinyPng}`);
+
+    fireEvent.click(within(preview).getByRole("button", { name: "关闭预览" }));
+    expect(screen.queryByRole("dialog", { name: "图片预览" })).toBeNull();
+  });
+
   it("生成失败后显示脱敏错误卡片", async () => {
     mockFetchByRoute({
       generationResponse: Promise.resolve(
@@ -471,6 +492,15 @@ describe("ImageWorkbench chat canvas", () => {
     );
     expect(fetchMock.mock.calls.some(([url]) => url === "/api/images/generations")).toBe(false);
     expect(fetchMock.mock.calls.some(([url]) => url === "/api/images/edits")).toBe(false);
+
+    fireEvent.click(screen.getByRole("button", { name: "生成图片" }));
+    await screen.findByRole("img", { name: "AI 生成图片" });
+    const body = JSON.parse(String(generationCalls(fetchMock)[0][1]?.body));
+    expect(body).toMatchObject({
+      size: "auto",
+      resolution: "auto",
+      quality: "auto"
+    });
   });
 
   it("移动端模板 Modal 使用整窗滚动避免内容被裁切", async () => {
@@ -565,6 +595,7 @@ describe("ImageWorkbench chat canvas", () => {
     expect(templateRegion.className).toContain("overflow-hidden");
     expect(scrollContainer?.className).toContain("flex-1");
     expect(scrollContainer?.className).toContain("overflow-y-auto");
+    expect(scrollContainer?.className).toContain("template-scrollbar");
     expect(defaultButton.className).toContain("min-h-9");
     expect(categoryButton.className).toContain("min-h-10");
     expect(settingsToggle.className).toContain("min-h-9");
