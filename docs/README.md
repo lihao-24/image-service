@@ -9,6 +9,12 @@
 - 稳定数据与存储约束：`reference/data-and-storage.md`
 - OpenAI 兼容图片接口约束：`reference/openai-compatible-images-api.md`
 
+## 当前阶段材料
+
+- `specs/2026-05-19-phase-2-google-imagen-provider-architecture-prd.md`：Phase 2 PRD，记录多 provider 架构、侧边栏 Accordion 高级参数 UI、错误归一化和差异化用量详情需求。Google AI Studio / Gemini API 直连接入因费用风险已先搁置，后续可能改为中转站模型；该文档仍属于待实现需求，不代表当前稳定系统事实。
+- `specs/2026-05-19-gpt-image-2-and-usage-hardening-design.md`：当前可执行设计，聚焦 `gpt-image-2` 配置核对、OpenAI-compatible adapter 加固、`GET /api/usage` 和轻量用量弹窗。
+- `plans/2026-05-19-gpt-image-2-and-usage-hardening-implementation-plan.md`：上述设计的实施计划；开始编码前需先确认计划末尾的执行前确认项。
+
 ## 目录说明
 
 - `reference/`：稳定参考文档。这里的内容应尽量保持当前有效，适合被实现、测试和 review 反复引用。
