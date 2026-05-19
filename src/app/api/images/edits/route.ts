@@ -19,6 +19,7 @@ import {
   getUsageDate,
   incrementSuccessfulGenerationUsage,
   QUOTA_EXCEEDED,
+  shouldEnforceDailyQuota,
   writeGenerationLog
 } from "@/lib/usage";
 
@@ -60,11 +61,14 @@ export async function POST(request: NextRequest | Request) {
 
   const usageDate = getUsageDate();
   const dailyLimit = getDailyLimit();
+  const quotaLimited = shouldEnforceDailyQuota(paramsResult.params.model);
   const startedAt = performance.now();
 
   try {
-    const quota = checkDailyQuota(db, userResult.userId, usageDate, dailyLimit);
-    if (!quota.ok) {
+    const quota = quotaLimited
+      ? checkDailyQuota(db, userResult.userId, usageDate, dailyLimit)
+      : null;
+    if (quota && !quota.ok) {
       writeGenerationLog(db, userResult.userId, {
         provider: paramsResult.params.provider,
         model: paramsResult.params.model,
@@ -185,7 +189,8 @@ export async function POST(request: NextRequest | Request) {
         paramsResult.params,
         {
           generationCount,
-          limit: dailyLimit
+          limit: quotaLimited ? dailyLimit : null,
+          limited: quotaLimited
         },
         { mode: IMAGE_EDIT_MODE }
       )

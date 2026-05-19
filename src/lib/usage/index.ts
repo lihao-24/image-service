@@ -72,6 +72,10 @@ export function checkDailyQuota(
   };
 }
 
+export function shouldEnforceDailyQuota(model: string): boolean {
+  return !model.startsWith("gpt-image-");
+}
+
 export function incrementSuccessfulGenerationUsage(
   db: ImageDatabase,
   userId: string,

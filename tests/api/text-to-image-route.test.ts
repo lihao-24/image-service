@@ -119,22 +119,32 @@ describe("POST /api/images/generations", () => {
     expect(mockOpenDatabase).not.toHaveBeenCalled();
   });
 
-  it("额度用尽返回 quota_exceeded，写拒绝日志且不调用 provider", async () => {
+  it("gpt-image-2 不受每日额度拦截，但成功后仍统计用量", async () => {
     mockUser();
     process.env.IMAGE_DAILY_LIMIT = "0";
+    const generateImage = vi.fn(async () => ({
+      b64Json: "base64-image",
+      raw: { data: [{ b64_json: "base64-image" }] }
+    }));
+    mockCreateAdapter.mockReturnValue({ generateImage });
 
     const response = await POST(createRequest(validBody));
     const body = await response.json();
 
-    expect(response.status).toBe(429);
-    expect(body.error).toBe("quota_exceeded");
-    expect(mockCreateAdapter).not.toHaveBeenCalled();
-    expect(getDailyUsage(currentDb, "user-w07", getUsageDate())).toBe(0);
+    expect(response.status).toBe(200);
+    expect(mockCheckDailyQuota).not.toHaveBeenCalled();
+    expect(generateImage).toHaveBeenCalledTimes(1);
+    expect(body.meta.daily_usage).toEqual({
+      generation_count: 1,
+      limit: null,
+      limited: false
+    });
+    expect(getDailyUsage(currentDb, "user-w07", getUsageDate())).toBe(1);
     const logs = listGenerationLogs(currentDb, "user-w07");
     expect(logs).toHaveLength(1);
     expect(logs[0]).toMatchObject({
-      status: "rejected",
-      errorCode: "quota_exceeded",
+      status: "success",
+      errorCode: null,
       promptLength: validBody.prompt.length,
       hasReferenceImage: false
     });
@@ -160,7 +170,8 @@ describe("POST /api/images/generations", () => {
     const body = await response.json();
 
     expect(response.status).toBe(200);
-    expect(events).toEqual(["quota", "provider"]);
+    expect(events).toEqual(["provider"]);
+    expect(mockCheckDailyQuota).not.toHaveBeenCalled();
     expect(generateImage).toHaveBeenCalledTimes(1);
     expect(generateImage).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -195,8 +206,8 @@ describe("POST /api/images/generations", () => {
         mode: "text-to-image",
         daily_usage: {
           generation_count: 1,
-          limit: 20,
-          limited: true
+          limit: null,
+          limited: false
         }
       }
     });

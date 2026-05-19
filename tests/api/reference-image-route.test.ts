@@ -183,23 +183,33 @@ describe("POST /api/images/edits", () => {
     expect(mockOpenDatabase).not.toHaveBeenCalled();
   });
 
-  it("额度用尽返回 quota_exceeded，写拒绝日志且不调用 provider", async () => {
+  it("gpt-image-2 参考图生图不受每日额度拦截，但成功后仍统计用量", async () => {
     mockUser();
     process.env.IMAGE_DAILY_LIMIT = "0";
+    const editImage = vi.fn(async () => ({
+      b64Json: "edited-base64-image",
+      raw: { data: [{ b64_json: "edited-base64-image" }] }
+    }));
+    mockCreateAdapter.mockReturnValue({ editImage });
 
     const response = await POST(createMultipartRequest());
     const body = await response.json();
 
-    expect(response.status).toBe(429);
-    expect(body.error).toBe("quota_exceeded");
-    expect(mockCreateAdapter).not.toHaveBeenCalled();
-    expect(getDailyUsage(currentDb, "user-w08", getUsageDate())).toBe(0);
+    expect(response.status).toBe(200);
+    expect(mockCheckDailyQuota).not.toHaveBeenCalled();
+    expect(editImage).toHaveBeenCalledTimes(1);
+    expect(body.meta.daily_usage).toEqual({
+      generation_count: 1,
+      limit: null,
+      limited: false
+    });
+    expect(getDailyUsage(currentDb, "user-w08", getUsageDate())).toBe(1);
     const logs = listGenerationLogs(currentDb, "user-w08");
     expect(logs).toHaveLength(1);
     expect(logs[0]).toMatchObject({
       mode: "image-edit",
-      status: "rejected",
-      errorCode: "quota_exceeded",
+      status: "success",
+      errorCode: null,
       promptLength: validFields.prompt.length,
       hasReferenceImage: true
     });
@@ -227,7 +237,8 @@ describe("POST /api/images/edits", () => {
     const body = await response.json();
 
     expect(response.status).toBe(200);
-    expect(events).toEqual(["quota", "provider"]);
+    expect(events).toEqual(["provider"]);
+    expect(mockCheckDailyQuota).not.toHaveBeenCalled();
     expect(editImage).toHaveBeenCalledTimes(1);
     expect(editImage).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -271,8 +282,8 @@ describe("POST /api/images/edits", () => {
         mode: "image-edit",
         daily_usage: {
           generation_count: 1,
-          limit: 20,
-          limited: true
+          limit: null,
+          limited: false
         }
       }
     });
