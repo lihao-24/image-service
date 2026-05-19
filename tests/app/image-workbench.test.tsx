@@ -640,7 +640,7 @@ describe("ImageWorkbench chat canvas", () => {
           getContext: () => ({ drawImage }),
           toBlob: (callback: BlobCallback) =>
             callback(new Blob(["compressed-reference"], { type: "image/jpeg" }))
-        } as HTMLCanvasElement;
+        } as unknown as HTMLCanvasElement;
       }
 
       return originalCreateElement(tagName);
