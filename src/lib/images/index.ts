@@ -14,9 +14,12 @@ export type TextToImageRequestBody = {
   model: string;
   prompt: string;
   size: string;
+  resolution?: string;
   quality: string;
   output_format?: string;
   outputFormat?: string;
+  background?: string;
+  moderation?: string;
 };
 
 export type TextToImageRequestValidationResult =
@@ -79,6 +82,10 @@ export function validateTextToImageRequestBody(
     return invalidGenerationParams("quality", "请选择有效的图片质量。");
   }
 
+  const resolution = readOptionalString(input.resolution);
+  const background = readOptionalString(input.background);
+  const moderation = readOptionalString(input.moderation);
+
   const outputFormat = readRequiredString(input.output_format ?? input.outputFormat);
   if (!outputFormat) {
     return invalidGenerationParams("output_format", "请选择有效的输出格式。");
@@ -91,8 +98,11 @@ export function validateTextToImageRequestBody(
       model,
       prompt,
       size,
+      ...(resolution ? { resolution } : {}),
       quality,
-      output_format: outputFormat
+      output_format: outputFormat,
+      ...(background ? { background } : {}),
+      ...(moderation ? { moderation } : {})
     }
   };
 }
@@ -110,8 +120,11 @@ export function validateReferenceImageFormData(
     model: formData.get("model"),
     prompt: formData.get("prompt"),
     size: formData.get("size"),
+    resolution: formData.get("resolution"),
     quality: formData.get("quality"),
-    output_format: formData.get("output_format") ?? formData.get("outputFormat")
+    output_format: formData.get("output_format") ?? formData.get("outputFormat"),
+    background: formData.get("background"),
+    moderation: formData.get("moderation")
   });
 
   if (!bodyResult.ok) {
@@ -131,7 +144,7 @@ export function validateReferenceImageFormData(
 export function createTemporaryImageResponse(
   b64Json: string,
   params: ValidatedImageGenerationParams,
-  dailyUsage: { generationCount: number; limit: number },
+  dailyUsage: { generationCount: number; limit: number | null; limited?: boolean },
   options: { mode?: "text-to-image" | "image-edit" } = {}
 ) {
   return {
@@ -143,12 +156,16 @@ export function createTemporaryImageResponse(
       provider: params.provider,
       model: params.model,
       size: params.size,
+      resolution: params.resolution,
       quality: params.quality,
       output_format: params.outputFormat,
+      background: params.background,
+      moderation: params.moderation,
       mode: options.mode ?? "text-to-image",
       daily_usage: {
         generation_count: dailyUsage.generationCount,
-        limit: dailyUsage.limit
+        limit: dailyUsage.limit,
+        limited: dailyUsage.limited ?? true
       }
     }
   };
@@ -156,6 +173,10 @@ export function createTemporaryImageResponse(
 
 function readRequiredString(value: unknown): string | null {
   return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function readOptionalString(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim() ? value.trim() : undefined;
 }
 
 function validateReferenceImage(value: FormDataEntryValue | null): ReferenceImageValidationResult {

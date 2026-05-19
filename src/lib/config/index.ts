@@ -21,14 +21,20 @@ export type PublicImageConfig = {
   defaults: {
     model: string;
     size: string;
+    resolution?: string;
     quality: string;
     outputFormat: string;
+    background?: string;
+    moderation?: string;
   };
   providers: PublicProviderConfig[];
   options: {
     sizes: string[];
+    resolutions?: string[];
     qualities: string[];
     outputFormats: string[];
+    backgrounds?: string[];
+    moderations?: string[];
   };
 };
 
@@ -37,14 +43,20 @@ export type ImageServiceConfig = {
   defaults: {
     model: string;
     size: string;
+    resolution: string;
     quality: string;
     outputFormat: string;
+    background: string;
+    moderation: string;
   };
   providers: ProviderConfig[];
   options: {
     sizes: string[];
+    resolutions: string[];
     qualities: string[];
     outputFormats: string[];
+    backgrounds: string[];
+    moderations: string[];
   };
 };
 
@@ -52,22 +64,33 @@ export type ImageGenerationParams = {
   provider: string;
   model: string;
   size: string;
+  resolution?: string;
   quality: string;
   output_format?: string;
   outputFormat?: string;
+  background?: string;
+  moderation?: string;
 };
 
 export type ValidatedImageGenerationParams = {
   provider: string;
   model: string;
   size: string;
+  resolution: string;
   quality: string;
   outputFormat: string;
+  background: string;
+  moderation: string;
 };
 
 export type ImageGenerationParamsValidationResult =
   | { ok: true; params: ValidatedImageGenerationParams; provider: ProviderConfig }
-  | { ok: false; code: "invalid_generation_params"; message: string; field: string };
+  | {
+      ok: false;
+      code: "invalid_generation_params" | "invalid_generation_size_resolution";
+      message: string;
+      field: string;
+    };
 
 type ProviderOptionInput = {
   id?: unknown;
@@ -93,12 +116,18 @@ const DEFAULT_PROVIDER_OPTIONS = JSON.stringify([
 
 const DEFAULT_PROVIDER = "sub2api";
 const DEFAULT_MODEL = "gpt-image-2";
-const DEFAULT_SIZE = "1024x1536";
-const DEFAULT_QUALITY = "high";
+const DEFAULT_SIZE = "auto";
+const DEFAULT_RESOLUTION = "auto";
+const DEFAULT_QUALITY = "auto";
 const DEFAULT_OUTPUT_FORMAT = "png";
-const DEFAULT_SIZE_OPTIONS = "1024x1024,1024x1536,1536x1024";
-const DEFAULT_QUALITY_OPTIONS = "high,medium,low";
+const DEFAULT_BACKGROUND = "auto";
+const DEFAULT_MODERATION = "auto";
+const DEFAULT_SIZE_OPTIONS = "auto,1:1,3:2,2:3,16:9,9:16";
+const DEFAULT_RESOLUTION_OPTIONS = "auto,standard,hd,4k";
+const DEFAULT_QUALITY_OPTIONS = "auto,high,medium,low";
 const DEFAULT_OUTPUT_FORMAT_OPTIONS = "png,jpeg,webp";
+const DEFAULT_BACKGROUND_OPTIONS = "auto,opaque";
+const DEFAULT_MODERATION_OPTIONS = "auto,low";
 
 export function parseImageServiceConfig(env: ImageConfigEnv = process.env): ImageServiceConfig {
   const providers = parseProviderOptions(
@@ -107,6 +136,10 @@ export function parseImageServiceConfig(env: ImageConfigEnv = process.env): Imag
   );
   const options = {
     sizes: parseCsvOption(env.IMAGE_SIZE_OPTIONS ?? DEFAULT_SIZE_OPTIONS, "IMAGE_SIZE_OPTIONS"),
+    resolutions: parseCsvOption(
+      env.IMAGE_RESOLUTION_OPTIONS ?? DEFAULT_RESOLUTION_OPTIONS,
+      "IMAGE_RESOLUTION_OPTIONS"
+    ),
     qualities: parseCsvOption(
       env.IMAGE_QUALITY_OPTIONS ?? DEFAULT_QUALITY_OPTIONS,
       "IMAGE_QUALITY_OPTIONS"
@@ -114,6 +147,14 @@ export function parseImageServiceConfig(env: ImageConfigEnv = process.env): Imag
     outputFormats: parseCsvOption(
       env.IMAGE_OUTPUT_FORMAT_OPTIONS ?? DEFAULT_OUTPUT_FORMAT_OPTIONS,
       "IMAGE_OUTPUT_FORMAT_OPTIONS"
+    ),
+    backgrounds: parseCsvOption(
+      env.IMAGE_BACKGROUND_OPTIONS ?? DEFAULT_BACKGROUND_OPTIONS,
+      "IMAGE_BACKGROUND_OPTIONS"
+    ),
+    moderations: parseCsvOption(
+      env.IMAGE_MODERATION_OPTIONS ?? DEFAULT_MODERATION_OPTIONS,
+      "IMAGE_MODERATION_OPTIONS"
     )
   };
   const config: ImageServiceConfig = {
@@ -121,8 +162,11 @@ export function parseImageServiceConfig(env: ImageConfigEnv = process.env): Imag
     defaults: {
       model: env.IMAGE_DEFAULT_MODEL?.trim() || DEFAULT_MODEL,
       size: env.IMAGE_DEFAULT_SIZE?.trim() || DEFAULT_SIZE,
+      resolution: env.IMAGE_DEFAULT_RESOLUTION?.trim() || DEFAULT_RESOLUTION,
       quality: env.IMAGE_DEFAULT_QUALITY?.trim() || DEFAULT_QUALITY,
-      outputFormat: env.IMAGE_DEFAULT_OUTPUT_FORMAT?.trim() || DEFAULT_OUTPUT_FORMAT
+      outputFormat: env.IMAGE_DEFAULT_OUTPUT_FORMAT?.trim() || DEFAULT_OUTPUT_FORMAT,
+      background: env.IMAGE_DEFAULT_BACKGROUND?.trim() || DEFAULT_BACKGROUND,
+      moderation: env.IMAGE_DEFAULT_MODERATION?.trim() || DEFAULT_MODERATION
     },
     providers,
     options
@@ -150,6 +194,49 @@ export function getPublicImageConfig(env: ImageConfigEnv = process.env): PublicI
   return toPublicImageConfig(parseImageServiceConfig(env));
 }
 
+export function mapImageSizeForProvider(model: string, size: string, resolution: string): string {
+  if (!model.startsWith("gpt-image-")) {
+    return size;
+  }
+
+  if (size === "auto" || resolution === "auto") {
+    return "auto";
+  }
+
+  const map: Record<string, Record<string, string>> = {
+    "1:1": {
+      standard: "1024x1024",
+      hd: "2048x2048"
+    },
+    "3:2": {
+      standard: "1536x1024",
+      hd: "2304x1536"
+    },
+    "2:3": {
+      standard: "1024x1536",
+      hd: "1536x2304"
+    },
+    "16:9": {
+      standard: "1536x864",
+      hd: "2048x1152",
+      "4k": "3840x2160"
+    },
+    "9:16": {
+      standard: "864x1536",
+      hd: "1152x2048",
+      "4k": "2160x3840"
+    }
+  };
+
+  const mappedSize = map[size]?.[resolution];
+
+  if (!mappedSize) {
+    throw new Error("invalid_generation_size_resolution");
+  }
+
+  return mappedSize;
+}
+
 export function validateImageGenerationParams(
   params: ImageGenerationParams,
   config: ImageServiceConfig = parseImageServiceConfig()
@@ -168,6 +255,25 @@ export function validateImageGenerationParams(
     return invalidParam("size", "请选择有效的图片尺寸。");
   }
 
+  const requestedResolution = params.resolution ?? config.defaults.resolution;
+
+  if (!config.options.resolutions.includes(requestedResolution)) {
+    return invalidParam("resolution", "请选择有效的图片分辨率。");
+  }
+
+  const resolution =
+    params.size === "auto" || requestedResolution === "auto" ? "auto" : requestedResolution;
+
+  try {
+    mapImageSizeForProvider(params.model, params.size, resolution);
+  } catch (error) {
+    if (error instanceof Error && error.message === "invalid_generation_size_resolution") {
+      return invalidSizeResolutionParam("resolution", "请选择有效的图片尺寸和分辨率组合。");
+    }
+
+    throw error;
+  }
+
   if (!config.options.qualities.includes(params.quality)) {
     return invalidParam("quality", "请选择有效的图片质量。");
   }
@@ -178,6 +284,18 @@ export function validateImageGenerationParams(
     return invalidParam("output_format", "请选择有效的输出格式。");
   }
 
+  const background = params.background ?? config.defaults.background;
+
+  if (!config.options.backgrounds.includes(background)) {
+    return invalidParam("background", "请选择有效的背景设置。");
+  }
+
+  const moderation = params.moderation ?? config.defaults.moderation;
+
+  if (!config.options.moderations.includes(moderation)) {
+    return invalidParam("moderation", "请选择有效的安全审核设置。");
+  }
+
   return {
     ok: true,
     provider,
@@ -185,8 +303,11 @@ export function validateImageGenerationParams(
       provider: provider.id,
       model: params.model,
       size: params.size,
+      resolution,
       quality: params.quality,
-      outputFormat
+      outputFormat,
+      background,
+      moderation
     }
   };
 }
@@ -283,12 +404,26 @@ function assertDefaultConfigIsAllowed(config: ImageServiceConfig) {
     throw new Error("默认 size 必须存在于 size allowlist。");
   }
 
+  if (!config.options.resolutions.includes(config.defaults.resolution)) {
+    throw new Error("默认 resolution 必须存在于 resolution allowlist。");
+  }
+
+  mapImageSizeForProvider(config.defaults.model, config.defaults.size, config.defaults.resolution);
+
   if (!config.options.qualities.includes(config.defaults.quality)) {
     throw new Error("默认 quality 必须存在于 quality allowlist。");
   }
 
   if (!config.options.outputFormats.includes(config.defaults.outputFormat)) {
     throw new Error("默认 output_format 必须存在于 output_format allowlist。");
+  }
+
+  if (!config.options.backgrounds.includes(config.defaults.background)) {
+    throw new Error("默认 background 必须存在于 background allowlist。");
+  }
+
+  if (!config.options.moderations.includes(config.defaults.moderation)) {
+    throw new Error("默认 moderation 必须存在于 moderation allowlist。");
   }
 }
 
@@ -319,6 +454,18 @@ function invalidParam(field: string, message: string): ImageGenerationParamsVali
   return {
     ok: false,
     code: "invalid_generation_params",
+    field,
+    message
+  };
+}
+
+function invalidSizeResolutionParam(
+  field: string,
+  message: string
+): ImageGenerationParamsValidationResult {
+  return {
+    ok: false,
+    code: "invalid_generation_size_resolution",
     field,
     message
   };
