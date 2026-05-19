@@ -1,7 +1,11 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { AUTH_REQUIRED, getSessionUser } from "@/lib/auth";
 import { createServerSupabaseClient } from "@/lib/auth/server";
-import { parseImageServiceConfig, validateImageGenerationParams } from "@/lib/config";
+import {
+  mapImageSizeForProvider,
+  parseImageServiceConfig,
+  validateImageGenerationParams
+} from "@/lib/config";
 import { closeDatabase, initializeDatabase, openDatabase } from "@/lib/db";
 import {
   createTemporaryImageResponse,
@@ -88,14 +92,21 @@ export async function POST(request: NextRequest | Request) {
     let result: Awaited<ReturnType<typeof adapter.editImage>>;
 
     try {
+      const providerSize = mapImageSizeForProvider(
+        paramsResult.params.model,
+        paramsResult.params.size,
+        paramsResult.params.resolution
+      );
       result = await adapter.editImage(paramsResult.provider, {
         model: paramsResult.params.model,
         prompt: formResult.body.prompt,
         image: formResult.body.image,
         imageFilename: formResult.body.imageFilename,
-        size: paramsResult.params.size,
+        size: providerSize,
         quality: paramsResult.params.quality,
-        outputFormat: paramsResult.params.outputFormat
+        outputFormat: paramsResult.params.outputFormat,
+        background: paramsResult.params.background,
+        moderation: paramsResult.params.moderation
       });
     } catch (error) {
       const errorCode = normalizeProviderErrorCode(error);
@@ -213,6 +224,7 @@ function normalizeProviderErrorCode(error: unknown): string {
       case "provider_response_invalid":
       case "provider_rate_limited":
       case "provider_auth_failed":
+      case "provider_content_policy_violation":
         return error.message;
       default:
         return "provider_request_failed";

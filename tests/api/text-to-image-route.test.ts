@@ -67,7 +67,8 @@ const validBody = {
   provider: "sub2api",
   model: "gpt-image-2",
   prompt: "一只玻璃茶杯放在木桌上",
-  size: "1024x1536",
+  size: "2:3",
+  resolution: "standard",
   quality: "high",
   output_format: "png"
 };
@@ -172,7 +173,9 @@ describe("POST /api/images/generations", () => {
         prompt: validBody.prompt,
         size: "1024x1536",
         quality: "high",
-        outputFormat: "png"
+        outputFormat: "png",
+        background: "auto",
+        moderation: "auto"
       }
     );
     expect(body).toEqual({
@@ -183,13 +186,17 @@ describe("POST /api/images/generations", () => {
       meta: {
         provider: "sub2api",
         model: "gpt-image-2",
-        size: "1024x1536",
+        size: "2:3",
+        resolution: "standard",
         quality: "high",
         output_format: "png",
+        background: "auto",
+        moderation: "auto",
         mode: "text-to-image",
         daily_usage: {
           generation_count: 1,
-          limit: 20
+          limit: 20,
+          limited: true
         }
       }
     });

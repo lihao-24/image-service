@@ -13,6 +13,8 @@ export type GenerateImageRequest = {
   size: string;
   quality: string;
   outputFormat: string;
+  background?: string;
+  moderation?: string;
 };
 
 export type EditImageRequest = GenerateImageRequest & {
@@ -36,6 +38,11 @@ type ImagesApiResponse = {
   data?: Array<{
     b64_json?: unknown;
   }>;
+  error?: {
+    code?: unknown;
+    message?: unknown;
+    type?: unknown;
+  };
 };
 
 export function createOpenAICompatibleImagesAdapter(
@@ -51,13 +58,7 @@ export function createOpenAICompatibleImagesAdapter(
           authorization: `Bearer ${provider.apiKey}`,
           "content-type": "application/json"
         },
-        body: JSON.stringify({
-          model: request.model,
-          prompt: request.prompt,
-          size: request.size,
-          quality: request.quality,
-          output_format: request.outputFormat
-        })
+        body: JSON.stringify(buildImageRequestBody(request))
       });
       const json = await readProviderJson(response);
 
@@ -74,6 +75,12 @@ export function createOpenAICompatibleImagesAdapter(
       body.set("size", request.size);
       body.set("quality", request.quality);
       body.set("output_format", request.outputFormat);
+      if (request.background) {
+        body.set("background", request.background);
+      }
+      if (request.moderation) {
+        body.set("moderation", request.moderation);
+      }
       body.set("image", request.image, request.imageFilename ?? "reference-image");
 
       const response = await fetchClient(buildProviderUrl(provider, "/images/edits"), {
@@ -107,10 +114,51 @@ async function readProviderJson(response: Response): Promise<ImagesApiResponse> 
   }
 
   if (!response.ok) {
-    throw new Error("provider_request_failed");
+    throw normalizeProviderError(response, json as ImagesApiResponse);
   }
 
   return json as ImagesApiResponse;
+}
+
+function buildImageRequestBody(request: GenerateImageRequest): Record<string, string> {
+  return {
+    model: request.model,
+    prompt: request.prompt,
+    size: request.size,
+    quality: request.quality,
+    output_format: request.outputFormat,
+    ...(request.background ? { background: request.background } : {}),
+    ...(request.moderation ? { moderation: request.moderation } : {})
+  };
+}
+
+function normalizeProviderError(response: Response, json: ImagesApiResponse): Error {
+  const code = typeof json.error?.code === "string" ? json.error.code : "";
+  const type = typeof json.error?.type === "string" ? json.error.type : "";
+  const normalized = `${code} ${type}`.toLowerCase();
+
+  if (normalized.includes("content_policy_violation")) {
+    return new Error("provider_content_policy_violation");
+  }
+
+  if (
+    response.status === 401 ||
+    response.status === 403 ||
+    normalized.includes("api_key") ||
+    normalized.includes("auth")
+  ) {
+    return new Error("provider_auth_failed");
+  }
+
+  if (
+    response.status === 429 ||
+    normalized.includes("rate_limit") ||
+    normalized.includes("rate limit")
+  ) {
+    return new Error("provider_rate_limited");
+  }
+
+  return new Error("provider_request_failed");
 }
 
 function requireB64Json(response: ImagesApiResponse, index: number): string {

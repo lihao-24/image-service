@@ -49,7 +49,8 @@ const validFields = {
   provider: "sub2api",
   model: "gpt-image-2",
   prompt: "把参考图改成柔和自然光产品照",
-  size: "1024x1536",
+  size: "2:3",
+  resolution: "standard",
   quality: "high",
   output_format: "png"
 };
@@ -240,6 +241,8 @@ describe("POST /api/images/edits", () => {
         size: "1024x1536",
         quality: "high",
         outputFormat: "png",
+        background: "auto",
+        moderation: "auto",
         image: expect.any(File),
         imageFilename: "reference.png"
       })
@@ -259,13 +262,17 @@ describe("POST /api/images/edits", () => {
       meta: {
         provider: "sub2api",
         model: "gpt-image-2",
-        size: "1024x1536",
+        size: "2:3",
+        resolution: "standard",
         quality: "high",
         output_format: "png",
+        background: "auto",
+        moderation: "auto",
         mode: "image-edit",
         daily_usage: {
           generation_count: 1,
-          limit: 20
+          limit: 20,
+          limited: true
         }
       }
     });
