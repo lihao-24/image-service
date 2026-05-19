@@ -45,7 +45,7 @@
 
 `generation_logs` 保存生成元信息。
 
-`daily_usage` 保存每日额度计数。
+`daily_usage` 保存每日成功生成次数。
 
 所有业务数据必须带 `user_id`，并在服务端按当前登录用户过滤。
 
@@ -55,4 +55,8 @@
 
 `generation_logs` 不保存 prompt 全文。允许保存 provider、model、mode、size、quality、output_format、status、error_code、duration_ms、prompt_length、has_reference_image、created_at 等元信息。
 
-`daily_usage` 以 `user_id + usage_date` 作为每日额度口径。生成请求应先检查额度；达到额度时不调用 provider，并写入拒绝日志。只有 provider 成功返回可用图片后才递增 `generation_count`，provider 调用失败不递增成功用量。
+`daily_usage` 以 `user_id + usage_date` 作为每日用量口径。只有 provider 成功返回可用图片后才递增 `generation_count`，provider 调用失败或返回空图片不递增成功用量。
+
+GPT Image 系列模型当前只统计成功生成次数，不做每日额度拦截；因此 `gpt-image-2` 请求不会因为 `daily_usage` 达到某个上限而在调用 provider 前被拒绝。未来接入受限模型时，再启用请求前额度检查；达到额度时不调用 provider，并写入拒绝日志。
+
+`GET /api/usage` 第一版读取当前登录用户今日总成功生成次数，不按模型拆分。按模型拆分留给后续需求，可基于 `generation_logs` 汇总或新增专门表。
