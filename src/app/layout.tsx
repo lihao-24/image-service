@@ -2,8 +2,12 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "image-service",
-  description: "个人 AI 生图网页服务"
+  title: "Focal",
+  description: "个人 AI 生图工作台",
+  icons: {
+    icon: "/favicon.png",
+    apple: "/apple-touch-icon.png"
+  }
 };
 
 export default function RootLayout({

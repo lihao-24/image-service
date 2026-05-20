@@ -28,7 +28,7 @@ export type SupabaseAuthClient = {
   };
 };
 
-export const AUTH_REQUIRED_MESSAGE = "请先登录后再使用 image-service。";
+export const AUTH_REQUIRED_MESSAGE = "请先登录后再使用 Focal。";
 
 export async function getSessionUser(
   supabase: SupabaseAuthClient

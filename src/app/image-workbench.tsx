@@ -300,7 +300,7 @@ export default function ImageWorkbench({ config, userLabel }: ImageWorkbenchProp
         image: {
           src: `data:image/${format};base64,${b64Json}`,
           outputFormat: format,
-          filename: `image-service-preview.${format === "jpeg" ? "jpg" : format}`
+          filename: `focal-preview.${format === "jpeg" ? "jpg" : format}`
         }
       };
 

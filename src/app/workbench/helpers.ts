@@ -181,7 +181,7 @@ export function toBuiltinPromptTemplate(template: BuiltinTemplateRecord): Builti
     variables: template.variables,
     source: {
       type: "external-inspired",
-      name: template.source_metadata?.name ?? "image-service",
+      name: template.source_metadata?.name ?? "Focal",
       referenceUrl: template.source_metadata?.referenceUrl,
       note: template.source_metadata?.note ?? "内置中文模板。"
     },

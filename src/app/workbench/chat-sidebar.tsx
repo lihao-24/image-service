@@ -1,3 +1,4 @@
+import Image from "next/image";
 import { useState } from "react";
 import type { PublicImageConfig, PublicProviderConfig } from "@/lib/config";
 import type {
@@ -105,11 +106,16 @@ export function ChatSidebar({
     >
       <div className="mb-5 flex items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-3">
-          <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-white text-sm font-black text-slate-950">
-            IS
-          </span>
+          <Image
+            alt="Focal"
+            className="h-12 w-12 rounded-xl"
+            height={48}
+            priority
+            src="/focal-icon-light.png"
+            width={48}
+          />
           <div className="min-w-0">
-            <p className="m-0 text-sm font-bold text-white">image-service</p>
+            <p className="m-0 text-sm font-bold text-white">Focal</p>
             <p className="m-0 text-xs text-slate-400">AI 生图工作台</p>
           </div>
         </div>
