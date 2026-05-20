@@ -2014,6 +2014,185 @@ export const BUILTIN_PROMPT_TEMPLATES: BuiltinPromptTemplate[] = [
     safetyNotes: ["请确保参考图人物授权，避免生成具体在世人物的误导性内容。"]
   },
   {
+    id: "builtin-image-edit-id-photo",
+    title: "根据图片生成证件照",
+    category: "image-edit",
+    tags: ["图生图", "证件照", "人像"],
+    mode: "image-edit",
+    recommended: {
+      model: "gpt-image-2",
+      size: "1024x1536",
+      quality: "high",
+      outputFormat: "jpeg",
+      referenceMode: "single-image"
+    },
+    prompt:
+      "基于上传的人像照片，生成一张「{{证件照规格}}」证件照。保留人物真实身份特征、脸型比例、五官和自然表情，调整为正面或接近正面的规范构图，背景使用「{{背景颜色}}」，光线均匀，服装整洁，边缘干净，适合正式证件照预览。不要改变人物身份，不要过度美颜，不要添加水印、文字、边框、夸张滤镜或不真实的制服。",
+    variables: [
+      {
+        key: "证件照规格",
+        label: "证件照规格",
+        placeholder: "例如：一寸、二寸、护照风格、签证照风格",
+        required: true,
+        defaultValue: "一寸标准证件照",
+        maxLength: 60
+      },
+      {
+        key: "背景颜色",
+        label: "背景颜色",
+        placeholder: "例如：白色、蓝色、浅灰色、红色",
+        required: true,
+        defaultValue: "白色",
+        maxLength: 30
+      }
+    ],
+    source: {
+      type: "original",
+      name: "Focal",
+      referenceUrl: REPOSITORY_URL,
+      note: "原创中文图生图模板。"
+    },
+    safetyNotes: ["证件照结果仅用于视觉生成预览，正式证件要求请以办理机构规范为准。"]
+  },
+  {
+    id: "builtin-image-edit-anime-avatar",
+    title: "根据图片生成动漫头像",
+    category: "image-edit",
+    tags: ["图生图", "动漫头像", "头像"],
+    mode: "image-edit",
+    recommended: {
+      model: "gpt-image-2",
+      size: "1024x1024",
+      quality: "high",
+      outputFormat: "png",
+      referenceMode: "single-image"
+    },
+    prompt:
+      "基于上传的人像、宠物或角色参考图，生成一张「{{动漫风格}}」动漫头像。保留主体最重要的识别特征、发型或轮廓、表情气质和配色记忆点，构图适合社交头像，背景简洁有氛围，线条干净，色彩明亮但不过曝。不要复刻具体在世画师或现有 IP 风格，不要改变主体身份，不要添加乱码、水印、真实品牌 Logo 或多余文字。",
+    variables: [
+      {
+        key: "动漫风格",
+        label: "动漫风格",
+        placeholder: "例如：清爽日系、赛璐璐、软萌 Q 版、精致乙游风",
+        required: true,
+        defaultValue: "清爽日系动漫头像",
+        maxLength: 80
+      }
+    ],
+    source: {
+      type: "original",
+      name: "Focal",
+      referenceUrl: REPOSITORY_URL,
+      note: "原创中文图生图模板。"
+    }
+  },
+  {
+    id: "builtin-image-edit-human-to-animal",
+    title: "根据图片中的人生成动物",
+    category: "image-edit",
+    tags: ["图生图", "人像拟物", "动物化"],
+    mode: "image-edit",
+    recommended: {
+      model: "gpt-image-2",
+      size: "1024x1024",
+      quality: "high",
+      outputFormat: "png",
+      referenceMode: "single-image"
+    },
+    prompt:
+      "基于上传图片中的人物，生成一只「{{动物类型}}」形象。需要把人物的气质、表情、姿态、发型轮廓、服装配色或标志性配饰转译到动物角色上，让观众能感到两者有关联；画面风格为「{{画面风格}}」，可以可爱、写实或故事感，但不要保留真人脸部拼贴。不要生成侮辱性、歧视性或恐怖变形效果，不要添加乱码、水印或真实品牌 Logo。",
+    variables: [
+      {
+        key: "动物类型",
+        label: "动物类型",
+        placeholder: "例如：猫、狐狸、柴犬、兔子、熊猫",
+        required: true,
+        defaultValue: "猫",
+        maxLength: 40
+      },
+      {
+        key: "画面风格",
+        label: "画面风格",
+        placeholder: "例如：温暖插画、写实摄影、Q 版头像、电影感",
+        required: true,
+        defaultValue: "温暖插画头像",
+        maxLength: 80
+      }
+    ],
+    source: {
+      type: "original",
+      name: "Focal",
+      referenceUrl: REPOSITORY_URL,
+      note: "原创中文图生图模板。"
+    },
+    safetyNotes: ["避免把真实人物动物化为带有侮辱、歧视或嘲讽含义的结果。"]
+  },
+  {
+    id: "builtin-image-edit-animal-to-human",
+    title: "根据图片中的动物生成人",
+    category: "image-edit",
+    tags: ["图生图", "动物拟人", "角色化"],
+    mode: "image-edit",
+    recommended: {
+      model: "gpt-image-2",
+      size: "1024x1536",
+      quality: "high",
+      outputFormat: "png",
+      referenceMode: "single-image"
+    },
+    prompt:
+      "基于上传图片中的动物，生成一位「{{人物设定}}」人类角色。把动物的品种特征、毛色或花纹、眼神、性格气质、姿态和标志性配饰转译成人物的发型、服装、配色和表情；构图完整，像角色设定或头像写真。不要直接把动物头贴到人身上，不要复刻现有 IP，不要出现畸形肢体、乱码、水印或真实品牌 Logo。",
+    variables: [
+      {
+        key: "人物设定",
+        label: "人物设定",
+        placeholder: "例如：温柔少年、酷飒少女、优雅管家、冒险家",
+        required: true,
+        defaultValue: "温柔年轻角色",
+        maxLength: 80
+      }
+    ],
+    source: {
+      type: "original",
+      name: "Focal",
+      referenceUrl: REPOSITORY_URL,
+      note: "原创中文图生图模板。"
+    }
+  },
+  {
+    id: "builtin-image-edit-gender-swap-portrait",
+    title: "根据图片中的人生成反转性别的照片",
+    category: "image-edit",
+    tags: ["图生图", "性别反转", "人像"],
+    mode: "image-edit",
+    recommended: {
+      model: "gpt-image-2",
+      size: "1024x1536",
+      quality: "high",
+      outputFormat: "jpeg",
+      referenceMode: "single-image"
+    },
+    prompt:
+      "基于上传人像，生成一张「{{目标呈现}}」的性别反转照片：如果参考图人物呈现为男性，则生成女性化版本；如果呈现为女性，则生成男性化版本。保留人物身份关联感、脸部比例、神态、年龄段、姿态和摄影光线，只调整发型、服装、妆容或面部性别表达，让结果自然可信。不要丑化、嘲讽或刻板化任何性别，不要生成低俗内容、水印、乱码或真实品牌 Logo。",
+    variables: [
+      {
+        key: "目标呈现",
+        label: "目标呈现",
+        placeholder: "例如：自然写实、杂志写真、职场形象、生活照",
+        required: true,
+        defaultValue: "自然写实人像",
+        maxLength: 80
+      }
+    ],
+    source: {
+      type: "original",
+      name: "Focal",
+      referenceUrl: REPOSITORY_URL,
+      note: "原创中文图生图模板。"
+    },
+    safetyNotes: ["请尊重参考图人物授权和性别表达，避免冒犯性或误导性用途。"]
+  },
+  {
     id: "builtin-image-edit-illustration-redraw",
     title: "参考图插画风格重绘",
     category: "illustration-art",

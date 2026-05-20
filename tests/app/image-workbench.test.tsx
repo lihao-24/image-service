@@ -115,6 +115,33 @@ const infographicTemplate = {
   is_favorite: true
 };
 
+const imageEditIdPhotoTemplate = {
+  source: "builtin",
+  id: "builtin-image-edit-id-photo",
+  title: "根据图片生成证件照",
+  category: "image-edit",
+  category_name: "图生图",
+  tags: ["图生图", "证件照", "人像"],
+  mode: "image-edit",
+  recommended: {
+    model: "gpt-image-2",
+    size: "1024x1536",
+    quality: "high",
+    output_format: "jpeg",
+    reference_mode: "single-image"
+  },
+  prompt: "基于上传人像照片生成一张标准证件照，保留人物身份特征，使用纯色背景。",
+  variables: [],
+  source_metadata: {
+    type: "original",
+    name: "Focal",
+    referenceUrl: "https://github.com/freestylefly/awesome-gpt-image-2",
+    note: "原创中文图生图模板。"
+  },
+  safety_notes: [],
+  is_favorite: false
+};
+
 const mineTemplate = {
   source: "mine",
   id: "recipe_1",
@@ -531,6 +558,25 @@ describe("ImageWorkbench chat canvas", () => {
     });
   });
 
+  it("主页和侧边栏图生图入口打开带模板内容的 Modal", async () => {
+    mockFetchByRoute();
+
+    renderWorkbench();
+    const quickActions = await screen.findAllByRole("button", { name: "图生图" });
+    fireEvent.click(quickActions[0]);
+
+    const modal = await screen.findByRole("dialog", { name: "图生图模板" });
+    expect(within(modal).getByRole("button", { name: "根据图片生成证件照" })).toBeTruthy();
+    fireEvent.click(within(modal).getByRole("button", { name: "关闭" }));
+
+    const sidebar = await screen.findByRole("complementary", { name: "工作台侧边栏" });
+    expect(within(sidebar).getByRole("button", { name: "打开模板分类 图生图" })).toBeTruthy();
+
+    fireEvent.click(within(sidebar).getByRole("button", { name: "打开模板分类 图生图" }));
+    const sidebarModal = await screen.findByRole("dialog", { name: "图生图模板" });
+    expect(within(sidebarModal).getByRole("button", { name: "根据图片生成证件照" })).toBeTruthy();
+  });
+
   it("移动端模板 Modal 使用整窗滚动避免内容被裁切", async () => {
     mockFetchByRoute();
     window.innerWidth = 375;
@@ -922,10 +968,11 @@ function createTemplateLibraryResponse(
     categories: overrides.categories ?? [
       { id: "ecommerce-product", name: "电商产品", description: "商品主图" },
       { id: "ui-interface", name: "UI与界面", description: "应用界面和社媒截图" },
+      { id: "image-edit", name: "图生图", description: "参考图转换和人像改造" },
       { id: "infographic", name: "信息图表", description: "知识卡片" }
     ],
     templates: {
-      builtin: [ecommerceTemplate, infographicTemplate],
+      builtin: [ecommerceTemplate, infographicTemplate, imageEditIdPhotoTemplate],
       mine: overrides.mine ?? []
     },
     favorite_template_ids: [infographicTemplate.id]
