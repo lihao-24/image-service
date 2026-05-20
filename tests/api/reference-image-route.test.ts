@@ -307,6 +307,7 @@ describe("POST /api/images/edits", () => {
 
   it("provider 失败写失败日志，不递增 daily_usage", async () => {
     mockUser();
+    const warnMock = vi.spyOn(console, "warn").mockImplementation(() => {});
     const editImage = vi.fn(async () => {
       throw new Error("provider_request_failed");
     });
@@ -332,6 +333,36 @@ describe("POST /api/images/edits", () => {
     expect(JSON.stringify(logs)).not.toContain(validFields.prompt);
     expect(JSON.stringify(logs)).not.toContain("test-key");
     expect(JSON.stringify(logs)).not.toContain("Error:");
+    expect(mockCreateAdapter).toHaveBeenCalledWith(
+      expect.objectContaining({
+        logger: console,
+        requestId: expect.stringMatching(/^img_/)
+      })
+    );
+    const requestId = mockCreateAdapter.mock.calls[0]?.[0]?.requestId;
+    expect(warnMock).toHaveBeenCalledWith(
+      "[image-service] image request failed",
+      expect.objectContaining({
+        requestId,
+        providerId: "sub2api",
+        model: "gpt-image-2",
+        mode: "image-edit",
+        size: "2:3",
+        resolution: "standard",
+        providerSize: "1024x1536",
+        quality: "high",
+        outputFormat: "png",
+        background: "auto",
+        moderation: "auto",
+        hasReferenceImage: true,
+        promptLength: validFields.prompt.length,
+        errorCode: "provider_request_failed",
+        durationMs: expect.any(Number)
+      })
+    );
+    expect(JSON.stringify(warnMock.mock.calls)).not.toContain(validFields.prompt);
+    expect(JSON.stringify(warnMock.mock.calls)).not.toContain("reference-bytes");
+    warnMock.mockRestore();
   });
 
   it("provider 返回空图片时写失败日志，不递增 daily_usage", async () => {

@@ -182,6 +182,7 @@ describe("createOpenAICompatibleImagesAdapter", () => {
   });
 
   it("provider 返回缺少图片时输出脱敏诊断日志", async () => {
+    const infoMock = vi.fn();
     const warnMock = vi.fn();
     const fetchMock = vi.fn(async () => new Response(
       JSON.stringify({
@@ -192,7 +193,7 @@ describe("createOpenAICompatibleImagesAdapter", () => {
     ));
     const adapter = createOpenAICompatibleImagesAdapter({
       fetch: fetchMock,
-      logger: { warn: warnMock }
+      logger: { info: infoMock, warn: warnMock }
     });
 
     await expect(
@@ -208,17 +209,117 @@ describe("createOpenAICompatibleImagesAdapter", () => {
     expect(warnMock).toHaveBeenCalledWith(
       "[image-provider] invalid provider response",
       {
+        requestId: "img_untracked",
         providerId: "sub2api",
         endpoint: "/images/generations",
         status: 200,
+        statusText: "",
         ok: true,
         contentType: "application/json",
+        contentLength: null,
         response: {
           topLevelKeys: ["data", "error"],
           dataLength: 1,
           dataItems: [{ index: 0, keys: ["revised_prompt"], hasB64Json: false }],
           errorCode: "empty_result",
           errorType: "provider_error"
+        }
+      }
+    );
+  });
+
+  it("provider 返回非 JSON 时输出响应摘要和脱敏 body 预览", async () => {
+    const infoMock = vi.fn();
+    const warnMock = vi.fn();
+    const fetchMock = vi.fn(async () => new Response(
+      "<html><body>Gateway timeout sk-test-secret Bearer token</body></html>",
+      {
+        status: 504,
+        statusText: "Gateway Timeout",
+        headers: {
+          "content-type": "text/html; charset=utf-8",
+          "content-length": "68"
+        }
+      }
+    ));
+    const adapter = createOpenAICompatibleImagesAdapter({
+      fetch: fetchMock,
+      logger: { info: infoMock, warn: warnMock },
+      requestId: "img_test_123"
+    });
+
+    await expect(
+      adapter.generateImage(provider, {
+        model: "gpt-image-2",
+        prompt: "敏感 prompt 不应进入日志",
+        size: "auto",
+        quality: "auto",
+        outputFormat: "png"
+      })
+    ).rejects.toThrow("provider_response_invalid");
+
+    expect(warnMock).toHaveBeenCalledWith(
+      "[image-provider] provider response json parse failed",
+      {
+        requestId: "img_test_123",
+        providerId: "sub2api",
+        endpoint: "/images/generations",
+        status: 504,
+        statusText: "Gateway Timeout",
+        ok: false,
+        contentType: "text/html; charset=utf-8",
+        contentLength: "68",
+        bodyPreview: "<html><body>Gateway timeout [REDACTED_SECRET] [REDACTED_AUTH]</body></html>"
+      }
+    );
+  });
+
+  it("provider 非 2xx JSON 响应输出脱敏诊断日志", async () => {
+    const infoMock = vi.fn();
+    const warnMock = vi.fn();
+    const fetchMock = vi.fn(async () => new Response(
+      JSON.stringify({
+        error: {
+          code: "rate_limit_exceeded",
+          type: "requests",
+          message: "不要记录 provider message"
+        }
+      }),
+      { status: 429, statusText: "Too Many Requests", headers: { "content-type": "application/json" } }
+    ));
+    const adapter = createOpenAICompatibleImagesAdapter({
+      fetch: fetchMock,
+      logger: { info: infoMock, warn: warnMock },
+      requestId: "img_test_456"
+    });
+
+    await expect(
+      adapter.generateImage(provider, {
+        model: "gpt-image-2",
+        prompt: "敏感 prompt 不应进入日志",
+        size: "auto",
+        quality: "auto",
+        outputFormat: "png"
+      })
+    ).rejects.toThrow("provider_rate_limited");
+
+    expect(warnMock).toHaveBeenCalledWith(
+      "[image-provider] provider error response",
+      {
+        requestId: "img_test_456",
+        providerId: "sub2api",
+        endpoint: "/images/generations",
+        status: 429,
+        statusText: "Too Many Requests",
+        ok: false,
+        contentType: "application/json",
+        contentLength: null,
+        response: {
+          topLevelKeys: ["error"],
+          dataLength: null,
+          dataItems: [],
+          errorCode: "rate_limit_exceeded",
+          errorType: "requests"
         }
       }
     );

@@ -230,6 +230,7 @@ describe("POST /api/images/generations", () => {
 
   it("provider 失败写失败日志，不递增 daily_usage", async () => {
     mockUser();
+    const warnMock = vi.spyOn(console, "warn").mockImplementation(() => {});
     const generateImage = vi.fn(async () => {
       throw new Error("provider_request_failed");
     });
@@ -255,6 +256,35 @@ describe("POST /api/images/generations", () => {
     expect(JSON.stringify(logs)).not.toContain(validBody.prompt);
     expect(JSON.stringify(logs)).not.toContain("test-key");
     expect(JSON.stringify(logs)).not.toContain("Error:");
+    expect(mockCreateAdapter).toHaveBeenCalledWith(
+      expect.objectContaining({
+        logger: console,
+        requestId: expect.stringMatching(/^img_/)
+      })
+    );
+    const requestId = mockCreateAdapter.mock.calls[0]?.[0]?.requestId;
+    expect(warnMock).toHaveBeenCalledWith(
+      "[image-service] image request failed",
+      expect.objectContaining({
+        requestId,
+        providerId: "sub2api",
+        model: "gpt-image-2",
+        mode: "text-to-image",
+        size: "2:3",
+        resolution: "standard",
+        providerSize: "1024x1536",
+        quality: "high",
+        outputFormat: "png",
+        background: "auto",
+        moderation: "auto",
+        hasReferenceImage: false,
+        promptLength: validBody.prompt.length,
+        errorCode: "provider_request_failed",
+        durationMs: expect.any(Number)
+      })
+    );
+    expect(JSON.stringify(warnMock.mock.calls)).not.toContain(validBody.prompt);
+    warnMock.mockRestore();
   });
 
   it("provider 返回空图片时写失败日志，不递增 daily_usage", async () => {

@@ -168,12 +168,20 @@ OpenAI-compatible adapter 需要读取 provider 非 2xx 响应中的常见错误
 - 非 JSON 响应 -> `provider_response_invalid`
 - 其他非 2xx -> `provider_request_failed`
 
-当 provider 返回 2xx 且响应可解析，但没有可用的 `data[].b64_json` 时，后端仍返回
-`provider_response_invalid`，并输出一条 `[image-provider] invalid provider response`
-诊断日志。日志只能包含脱敏结构信息：provider id、endpoint、HTTP status、content-type、
-响应顶层字段、`data` 数量、前几个 `data` item 的字段名和是否有非空 `b64_json`、
-provider error code/type。不得记录 prompt、图片 base64、Authorization header、API key、
-完整 provider message 或 stack trace。
+图片生成失败路径必须输出结构化诊断日志，并用同一个 `requestId` 串联 route 和 provider。
+当前日志事件包括：
+
+- `[image-service] image request started`
+- `[image-provider] provider response json parse failed`
+- `[image-provider] provider error response`
+- `[image-provider] invalid provider response`
+- `[image-service] image request failed`
+
+日志只能包含脱敏结构信息：requestId、provider id、endpoint、mode、model、尺寸/质量/格式等
+参数摘要、prompt 长度、HTTP status/statusText、content-type、content-length、响应顶层字段、
+`data` 数量、前几个 `data` item 的字段名和是否有非空 `b64_json`、provider error code/type。
+非 JSON 响应可记录截断后的 body 预览，但必须先脱敏并限制长度。不得记录 prompt 全文、图片
+base64、上传图片内容、Authorization header、API key、cookie、完整 provider message 或 stack trace。
 
 参考图上传：
 

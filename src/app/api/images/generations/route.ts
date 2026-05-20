@@ -6,6 +6,12 @@ import {
   parseImageServiceConfig,
   validateImageGenerationParams
 } from "@/lib/config";
+import {
+  createImageRequestId,
+  logImageRequestFailed,
+  logImageRequestStarted,
+  type ImageRequestLogContext
+} from "@/lib/diagnostics/image-logs";
 import { closeDatabase, initializeDatabase, openDatabase } from "@/lib/db";
 import {
   createTemporaryImageResponse,
@@ -57,6 +63,7 @@ export async function POST(request: NextRequest | Request) {
   const dailyLimit = getDailyLimit();
   const quotaLimited = shouldEnforceDailyQuota(paramsResult.params.model);
   const startedAt = performance.now();
+  const requestId = createImageRequestId();
 
   try {
     const quota = quotaLimited
@@ -86,8 +93,9 @@ export async function POST(request: NextRequest | Request) {
       );
     }
 
-    const adapter = createOpenAICompatibleImagesAdapter();
+    const adapter = createOpenAICompatibleImagesAdapter({ logger: console, requestId });
     let result: Awaited<ReturnType<typeof adapter.generateImage>>;
+    let logContext: ImageRequestLogContext | null = null;
 
     try {
       const providerSize = mapImageSizeForProvider(
@@ -95,6 +103,22 @@ export async function POST(request: NextRequest | Request) {
         paramsResult.params.size,
         paramsResult.params.resolution
       );
+      logContext = {
+        requestId,
+        providerId: paramsResult.params.provider,
+        model: paramsResult.params.model,
+        mode: TEXT_TO_IMAGE_MODE,
+        size: paramsResult.params.size,
+        resolution: paramsResult.params.resolution,
+        providerSize,
+        quality: paramsResult.params.quality,
+        outputFormat: paramsResult.params.outputFormat,
+        background: paramsResult.params.background,
+        moderation: paramsResult.params.moderation,
+        hasReferenceImage: false,
+        promptLength: bodyResult.body.prompt.length
+      };
+      logImageRequestStarted(console, logContext);
       result = await adapter.generateImage(paramsResult.provider, {
         model: paramsResult.params.model,
         prompt: bodyResult.body.prompt,
@@ -106,6 +130,9 @@ export async function POST(request: NextRequest | Request) {
       });
     } catch (error) {
       const errorCode = normalizeProviderErrorCode(error);
+      if (logContext) {
+        logImageRequestFailed(console, logContext, errorCode, elapsedMs(startedAt));
+      }
       writeGenerationLog(db, userResult.userId, {
         provider: paramsResult.params.provider,
         model: paramsResult.params.model,
@@ -131,6 +158,9 @@ export async function POST(request: NextRequest | Request) {
 
     if (!isUsableImageB64Json(result.b64Json)) {
       const errorCode = "provider_response_invalid";
+      if (logContext) {
+        logImageRequestFailed(console, logContext, errorCode, elapsedMs(startedAt));
+      }
       writeGenerationLog(db, userResult.userId, {
         provider: paramsResult.params.provider,
         model: paramsResult.params.model,

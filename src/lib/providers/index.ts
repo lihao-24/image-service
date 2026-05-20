@@ -1,4 +1,10 @@
 import type { ProviderConfig } from "@/lib/config";
+import {
+  readDiagnosticString,
+  responseMetadata,
+  safeBodyPreview,
+  type ImageLogger
+} from "@/lib/diagnostics/image-logs";
 
 export type { ProviderConfig } from "@/lib/config";
 
@@ -32,7 +38,8 @@ export type ImagesProviderAdapter = {
 
 export type OpenAICompatibleImagesAdapterOptions = {
   fetch?: typeof fetch;
-  logger?: Pick<typeof console, "warn">;
+  logger?: ImageLogger;
+  requestId?: string;
 };
 
 type ImagesApiResponse = {
@@ -51,6 +58,7 @@ export function createOpenAICompatibleImagesAdapter(
 ): ImagesProviderAdapter {
   const fetchClient = options.fetch ?? fetch;
   const logger = options.logger ?? console;
+  const requestId = options.requestId ?? "img_untracked";
 
   return {
     async generateImage(provider, request) {
@@ -63,14 +71,20 @@ export function createOpenAICompatibleImagesAdapter(
         },
         body: JSON.stringify(buildImageRequestBody(request))
       });
-      const json = await readProviderJson(response);
+      const json = await readProviderJson(response, {
+        provider,
+        endpoint,
+        logger,
+        requestId
+      });
 
       return {
         b64Json: requireB64Json(json, 0, {
           provider,
           endpoint,
           response,
-          logger
+          logger,
+          requestId
         }),
         raw: json
       };
@@ -99,14 +113,20 @@ export function createOpenAICompatibleImagesAdapter(
         },
         body
       });
-      const json = await readProviderJson(response);
+      const json = await readProviderJson(response, {
+        provider,
+        endpoint,
+        logger,
+        requestId
+      });
 
       return {
         b64Json: extractB64Json(json, 1) ?? requireB64Json(json, 0, {
           provider,
           endpoint,
           response,
-          logger
+          logger,
+          requestId
         }),
         raw: json
       };
@@ -118,16 +138,22 @@ function buildProviderUrl(provider: ProviderConfig, endpointPath: string): strin
   return `${provider.baseUrl.replace(/\/+$/, "")}${endpointPath}`;
 }
 
-async function readProviderJson(response: Response): Promise<ImagesApiResponse> {
+async function readProviderJson(
+  response: Response,
+  context: Omit<ProviderDiagnosticContext, "response">
+): Promise<ImagesApiResponse> {
   let json: unknown;
+  const responseForJson = response.clone();
 
   try {
-    json = await response.json();
+    json = await responseForJson.json();
   } catch {
+    logProviderJsonParseFailed({ ...context, response }, await readBodyPreview(response));
     throw new Error("provider_response_invalid");
   }
 
   if (!response.ok) {
+    logProviderErrorResponse({ ...context, response }, json as ImagesApiResponse);
     throw normalizeProviderError(response, json as ImagesApiResponse);
   }
 
@@ -204,7 +230,8 @@ type ProviderDiagnosticContext = {
   provider: ProviderConfig;
   endpoint: string;
   response: Response;
-  logger: Pick<typeof console, "warn">;
+  logger: ImageLogger;
+  requestId: string;
 };
 
 function logInvalidProviderResponse(
@@ -212,11 +239,36 @@ function logInvalidProviderResponse(
   apiResponse: ImagesApiResponse
 ) {
   context.logger.warn("[image-provider] invalid provider response", {
+    requestId: context.requestId,
     providerId: context.provider.id,
     endpoint: context.endpoint,
-    status: context.response.status,
-    ok: context.response.ok,
-    contentType: context.response.headers.get("content-type") ?? "",
+    ...responseMetadata(context.response),
+    response: summarizeProviderResponse(apiResponse)
+  });
+}
+
+function logProviderJsonParseFailed(
+  context: ProviderDiagnosticContext,
+  bodyPreview: string
+) {
+  context.logger.warn("[image-provider] provider response json parse failed", {
+    requestId: context.requestId,
+    providerId: context.provider.id,
+    endpoint: context.endpoint,
+    ...responseMetadata(context.response),
+    bodyPreview
+  });
+}
+
+function logProviderErrorResponse(
+  context: ProviderDiagnosticContext,
+  apiResponse: ImagesApiResponse
+) {
+  context.logger.warn("[image-provider] provider error response", {
+    requestId: context.requestId,
+    providerId: context.provider.id,
+    endpoint: context.endpoint,
+    ...responseMetadata(context.response),
     response: summarizeProviderResponse(apiResponse)
   });
 }
@@ -237,6 +289,10 @@ function summarizeProviderResponse(apiResponse: ImagesApiResponse) {
   };
 }
 
-function readDiagnosticString(value: unknown): string | null {
-  return typeof value === "string" && value.trim() ? value.trim() : null;
+async function readBodyPreview(response: Response): Promise<string> {
+  try {
+    return safeBodyPreview(await response.text());
+  } catch {
+    return "";
+  }
 }

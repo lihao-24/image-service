@@ -145,10 +145,20 @@ sqlite3 /Users/hao/Desktop/lihao-data/image-service/sqlite/image-service.sqlite 
   "select status, coalesce(error_code,'(none)'), provider, model, mode, count(*), min(created_at), max(created_at), round(avg(duration_ms),1) from generation_logs group by status, error_code, provider, model, mode order by max(created_at) desc;"
 ```
 
-当 provider 返回成功 HTTP 响应但没有可用图片时，服务端会记录
-`[image-provider] invalid provider response` 诊断日志。该日志只包含 provider id、
-endpoint、HTTP status、content-type、响应顶层字段、`data` 数量和 provider
-错误 code/type，不记录 prompt、图片 base64、请求头、API key 或完整 provider message。
+图片生成失败路径会输出结构化诊断日志，并用同一个 `requestId` 串联 route 和 provider：
+
+```text
+[image-service] image request started
+[image-provider] provider response json parse failed
+[image-provider] provider error response
+[image-provider] invalid provider response
+[image-service] image request failed
+```
+
+这些日志只记录 requestId、provider id、endpoint、HTTP status、content-type、content-length、
+参数摘要、prompt 长度、响应顶层字段、`data` 数量、provider error code/type 和截断脱敏后的
+非 JSON body 预览。不记录 prompt 全文、图片 base64、上传图片内容、请求头、API key、cookie
+或完整 provider message。
 
 ## 后续更新
 
