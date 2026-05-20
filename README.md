@@ -33,10 +33,11 @@ git diff --check
 
 服务端通过 `IMAGE_PROVIDER_OPTIONS` 配置 provider allowlist，并用
 `IMAGE_DEFAULT_PROVIDER`、`IMAGE_DEFAULT_MODEL`、`IMAGE_DEFAULT_SIZE`、
-`IMAGE_DEFAULT_QUALITY`、`IMAGE_DEFAULT_OUTPUT_FORMAT` 配置默认值。公开接口
+`IMAGE_DEFAULT_RESOLUTION`、`IMAGE_DEFAULT_QUALITY`、`IMAGE_DEFAULT_OUTPUT_FORMAT`、
+`IMAGE_DEFAULT_BACKGROUND`、`IMAGE_DEFAULT_MODERATION` 配置默认值。公开接口
 `/api/image-options` 只返回 `defaultProvider`、`defaults`、provider
-`id/label/models` 和尺寸、质量、格式选项，不包含 `baseUrl`、`apiKeyEnv`
-或 API key。
+`id/label/models` 和尺寸、分辨率、质量、格式、背景、安全审核选项，不包含
+`baseUrl`、`apiKeyEnv` 或 API key。
 
 ## Prompt 配方 API
 
@@ -46,10 +47,11 @@ git diff --check
 - `PATCH /api/recipes/[recipeId]`：更新自己的 Prompt 配方。
 - `DELETE /api/recipes/[recipeId]`：删除自己的 Prompt 配方。
 
-保存和更新会在服务端按 allowlist 校验 `provider`、`model`、`size`、`quality`
-和 `output_format`。`user_id` 只来自服务端 Auth helper；接口不会接受客户端
-provider 配置、base URL 或 API key 元数据。生成 API 不会自动保存 Prompt 配方，
-只有显式调用 recipe API 才写入 `prompt_recipes`。
+保存和更新会在服务端按 allowlist 校验 `provider`、`model`、`size`、
+`resolution`、`quality`、`output_format`、`background` 和 `moderation`。
+`user_id` 只来自服务端 Auth helper；接口不会接受客户端 provider 配置、base URL
+或 API key 元数据。生成 API 不会自动保存 Prompt 配方，只有显式调用 recipe API
+才写入 `prompt_recipes`。
 
 ## 前端生图工作台
 
@@ -108,8 +110,45 @@ curl -fsS http://127.0.0.1:3010/health
 curl -I https://image.lihao66.top/health
 ```
 
+部署前建议先在当前提交上跑完整验证：
+
+```bash
+pnpm lint
+pnpm typecheck
+pnpm test
+pnpm build
+git diff --check
+```
+
 VPS Caddy 站点片段参考 `caddy/sites/image.lihao66.top.caddy`。Caddy 和 DNS 变更需要在
 对应机器上手动确认后应用。
+
+## 线上排障
+
+查看生产容器日志：
+
+```bash
+docker compose --env-file .env.production -f compose/prod/image-service.prod.compose.yml logs --tail=220 image-service
+```
+
+查看最近生成记录：
+
+```bash
+sqlite3 /Users/hao/Desktop/lihao-data/image-service/sqlite/image-service.sqlite \
+  "select datetime(created_at,'localtime'), status, coalesce(error_code,'(none)'), provider, model, mode, size, quality, output_format, duration_ms from generation_logs order by created_at desc limit 30;"
+```
+
+按错误类型汇总：
+
+```bash
+sqlite3 /Users/hao/Desktop/lihao-data/image-service/sqlite/image-service.sqlite \
+  "select status, coalesce(error_code,'(none)'), provider, model, mode, count(*), min(created_at), max(created_at), round(avg(duration_ms),1) from generation_logs group by status, error_code, provider, model, mode order by max(created_at) desc;"
+```
+
+当 provider 返回成功 HTTP 响应但没有可用图片时，服务端会记录
+`[image-provider] invalid provider response` 诊断日志。该日志只包含 provider id、
+endpoint、HTTP status、content-type、响应顶层字段、`data` 数量和 provider
+错误 code/type，不记录 prompt、图片 base64、请求头、API key 或完整 provider message。
 
 ## 后续更新
 
