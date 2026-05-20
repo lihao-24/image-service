@@ -127,8 +127,11 @@ const mineTemplate = {
   provider: "sub2api",
   model: "gpt-image-2",
   size: "2:3",
+  resolution: "standard",
   quality: "medium",
   output_format: "webp",
+  background: "opaque",
+  moderation: "low",
   prompt: "透明玻璃杯，产品摄影，浅色背景",
   negative_prompt: null,
   params: {},
@@ -737,8 +740,11 @@ describe("ImageWorkbench chat canvas", () => {
       provider: "sub2api",
       model: "gpt-image-2",
       size: "auto",
+      resolution: "auto",
       quality: "auto",
       output_format: "png",
+      background: "auto",
+      moderation: "auto",
       reference_mode: null
     });
     expect(body).not.toHaveProperty("image");

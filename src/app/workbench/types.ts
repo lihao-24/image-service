@@ -102,8 +102,11 @@ export type MineTemplateRecord = {
   provider?: string;
   model: string;
   size: string;
+  resolution?: string | null;
   quality: string;
   output_format: string;
+  background?: string | null;
+  moderation?: string | null;
   prompt: string;
   reference_mode: string | null;
   is_favorite: boolean;

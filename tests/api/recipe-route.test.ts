@@ -34,9 +34,12 @@ const validRecipeBody = {
   mode: "text-to-image",
   provider: "sub2api",
   model: "gpt-image-2",
-  size: "1024x1536",
+  size: "2:3",
+  resolution: "standard",
   quality: "high",
   output_format: "png",
+  background: "opaque",
+  moderation: "low",
   params: { seed: 123 },
   reference_mode: "none",
   is_favorite: true
@@ -110,7 +113,17 @@ describe("Prompt recipe API", () => {
       user_id: "server-user",
       title: "海边晚霞",
       prompt: "一张海边晚霞产品照片",
-      output_format: "png"
+      size: "2:3",
+      resolution: "standard",
+      output_format: "png",
+      background: "opaque",
+      moderation: "low",
+      params: {
+        seed: 123,
+        resolution: "standard",
+        background: "opaque",
+        moderation: "low"
+      }
     });
     expect(listPromptRecipes(currentDb, "server-user")).toHaveLength(1);
     expect(listPromptRecipes(currentDb, "client-user")).toHaveLength(0);
@@ -207,10 +220,15 @@ function dbRecipeInput(patch: Partial<Parameters<typeof createPromptRecipe>[2]> 
     mode: "text-to-image",
     provider: "sub2api",
     model: "gpt-image-2",
-    size: "1024x1536",
+    size: "2:3",
     quality: "high",
     outputFormat: "png",
-    params: { seed: 123 },
+    params: {
+      seed: 123,
+      resolution: "standard",
+      background: "opaque",
+      moderation: "low"
+    },
     referenceMode: "none",
     isFavorite: true,
     ...patch

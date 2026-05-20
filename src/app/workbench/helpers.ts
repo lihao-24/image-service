@@ -210,11 +210,11 @@ export function readTemplateParams(
     provider: template.provider || fallback.provider,
     model: template.model,
     size: template.size,
-    resolution: fallback.resolution,
+    resolution: template.resolution ?? fallback.resolution,
     quality: template.quality,
     outputFormat: template.output_format,
-    background: fallback.background,
-    moderation: fallback.moderation
+    background: template.background ?? fallback.background,
+    moderation: template.moderation ?? fallback.moderation
   };
 }
 

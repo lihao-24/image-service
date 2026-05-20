@@ -24,7 +24,8 @@ describe("recipe helper", () => {
       baseUrl: "https://evil.example",
       apiKey: "secret",
       model: "gpt-image-2",
-      size: "1024x1536",
+      size: "2:3",
+      resolution: "standard",
       quality: "high",
       output_format: "png"
     });
@@ -46,10 +47,10 @@ describe("recipe helper", () => {
         mode: "text-to-image",
         provider: "sub2api",
         model: "gpt-image-2",
-        size: "1024x1536",
+        size: "2:3",
         quality: "high",
         outputFormat: "png",
-        params: {},
+        params: { resolution: "standard", background: "opaque", moderation: "low" },
         referenceMode: "none",
         isFavorite: false
       });

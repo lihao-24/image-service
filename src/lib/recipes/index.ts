@@ -24,8 +24,11 @@ export type RecipeApiRecord = {
   provider: string;
   model: string;
   size: string;
+  resolution: string | null;
   quality: string;
   output_format: string;
+  background: string | null;
+  moderation: string | null;
   params: Record<string, unknown>;
   reference_mode: string | null;
   is_favorite: boolean;
@@ -89,10 +92,13 @@ export function validateRecipeRequestBody(body: unknown): RecipeValidationResult
       provider: readRequiredString(objectResult.value.provider) ?? "",
       model: readRequiredString(objectResult.value.model) ?? "",
       size: readRequiredString(objectResult.value.size) ?? "",
+      resolution: readOptionalString(objectResult.value.resolution) ?? undefined,
       quality: readRequiredString(objectResult.value.quality) ?? "",
       output_format: readRequiredString(
         objectResult.value.output_format ?? objectResult.value.outputFormat
-      ) ?? ""
+      ) ?? "",
+      background: readOptionalString(objectResult.value.background) ?? undefined,
+      moderation: readOptionalString(objectResult.value.moderation) ?? undefined
     },
     parseImageServiceConfig()
   );
@@ -113,7 +119,12 @@ export function validateRecipeRequestBody(body: unknown): RecipeValidationResult
       size: paramResult.params.size,
       quality: paramResult.params.quality,
       outputFormat: paramResult.params.outputFormat,
-      params: readParams(objectResult.value.params),
+      params: {
+        ...readParams(objectResult.value.params),
+        resolution: paramResult.params.resolution,
+        background: paramResult.params.background,
+        moderation: paramResult.params.moderation
+      },
       referenceMode: readNullableString(objectResult.value.reference_mode),
       isFavorite: readBoolean(objectResult.value.is_favorite)
     }
@@ -170,10 +181,13 @@ export function validateRecipePatchBody(body: unknown): RecipePatchValidationRes
       provider: readRequiredString(objectResult.value.provider) ?? "",
       model: readRequiredString(objectResult.value.model) ?? "",
       size: readRequiredString(objectResult.value.size) ?? "",
+      resolution: readOptionalString(objectResult.value.resolution) ?? undefined,
       quality: readRequiredString(objectResult.value.quality) ?? "",
       output_format: readRequiredString(
         objectResult.value.output_format ?? objectResult.value.outputFormat
-      ) ?? ""
+      ) ?? "",
+      background: readOptionalString(objectResult.value.background) ?? undefined,
+      moderation: readOptionalString(objectResult.value.moderation) ?? undefined
     };
     const paramResult = validateImageGenerationParams(currentParams, parseImageServiceConfig());
     if (!paramResult.ok) {
@@ -184,9 +198,15 @@ export function validateRecipePatchBody(body: unknown): RecipePatchValidationRes
     input.size = paramResult.params.size;
     input.quality = paramResult.params.quality;
     input.outputFormat = paramResult.params.outputFormat;
+    input.params = {
+      ...(input.params ?? readParams(objectResult.value.params)),
+      resolution: paramResult.params.resolution,
+      background: paramResult.params.background,
+      moderation: paramResult.params.moderation
+    };
   }
 
-  if ("params" in objectResult.value) {
+  if ("params" in objectResult.value && !input.params) {
     input.params = readParams(objectResult.value.params);
   }
 
@@ -249,8 +269,11 @@ export function toRecipeApiRecord(recipe: PromptRecipe): RecipeApiRecord {
     provider: recipe.provider,
     model: recipe.model,
     size: recipe.size,
+    resolution: readStoredParamString(recipe.params.resolution),
     quality: recipe.quality,
     output_format: recipe.outputFormat,
+    background: readStoredParamString(recipe.params.background),
+    moderation: readStoredParamString(recipe.params.moderation),
     params: recipe.params,
     reference_mode: recipe.referenceMode,
     is_favorite: recipe.isFavorite,
@@ -274,9 +297,17 @@ function findForbiddenKey(input: Record<string, unknown>): string | null {
 }
 
 function hasAnyGenerationParam(input: Record<string, unknown>) {
-  return ["provider", "model", "size", "quality", "output_format", "outputFormat"].some(
-    (key) => key in input
-  );
+  return [
+    "provider",
+    "model",
+    "size",
+    "resolution",
+    "quality",
+    "output_format",
+    "outputFormat",
+    "background",
+    "moderation"
+  ].some((key) => key in input);
 }
 
 function isAllowedMode(value: string | null | undefined): value is PromptRecipeInput["mode"] {
@@ -313,6 +344,10 @@ function readParams(value: unknown): Record<string, unknown> {
 
 function readBoolean(value: unknown): boolean {
   return value === true;
+}
+
+function readStoredParamString(value: unknown): string | null {
+  return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
 function invalidRecipeParams(

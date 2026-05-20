@@ -62,8 +62,11 @@ export type MinePromptTemplateApiRecord = {
   provider: string;
   model: string;
   size: string;
+  resolution: string | null;
   quality: string;
   output_format: string;
+  background: string | null;
+  moderation: string | null;
   prompt: string;
   negative_prompt: string | null;
   params: Record<string, unknown>;
@@ -181,8 +184,11 @@ function toMineTemplateApiRecord(recipe: PromptRecipe): MinePromptTemplateApiRec
     provider: recipe.provider,
     model: recipe.model,
     size: recipe.size,
+    resolution: readRecipeParamString(recipe.params.resolution),
     quality: recipe.quality,
     output_format: recipe.outputFormat,
+    background: readRecipeParamString(recipe.params.background),
+    moderation: readRecipeParamString(recipe.params.moderation),
     prompt: recipe.prompt,
     negative_prompt: recipe.negativePrompt,
     params: recipe.params,
@@ -267,4 +273,8 @@ function readRecipeTags(params: Record<string, unknown>) {
   }
 
   return tags.filter((tag): tag is string => typeof tag === "string" && tag.trim().length > 0);
+}
+
+function readRecipeParamString(value: unknown): string | null {
+  return typeof value === "string" && value.trim() ? value.trim() : null;
 }
