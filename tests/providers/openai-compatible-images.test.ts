@@ -180,4 +180,47 @@ describe("createOpenAICompatibleImagesAdapter", () => {
       })
     ).rejects.toThrow("provider_rate_limited");
   });
+
+  it("provider 返回缺少图片时输出脱敏诊断日志", async () => {
+    const warnMock = vi.fn();
+    const fetchMock = vi.fn(async () => new Response(
+      JSON.stringify({
+        data: [{ revised_prompt: "不要记录 prompt" }],
+        error: { code: "empty_result", type: "provider_error", message: "不要记录 message" }
+      }),
+      { status: 200, headers: { "content-type": "application/json" } }
+    ));
+    const adapter = createOpenAICompatibleImagesAdapter({
+      fetch: fetchMock,
+      logger: { warn: warnMock }
+    });
+
+    await expect(
+      adapter.generateImage(provider, {
+        model: "gpt-image-2",
+        prompt: "敏感 prompt 不应进入日志",
+        size: "auto",
+        quality: "auto",
+        outputFormat: "png"
+      })
+    ).rejects.toThrow("provider_response_invalid");
+
+    expect(warnMock).toHaveBeenCalledWith(
+      "[image-provider] invalid provider response",
+      {
+        providerId: "sub2api",
+        endpoint: "/images/generations",
+        status: 200,
+        ok: true,
+        contentType: "application/json",
+        response: {
+          topLevelKeys: ["data", "error"],
+          dataLength: 1,
+          dataItems: [{ index: 0, keys: ["revised_prompt"], hasB64Json: false }],
+          errorCode: "empty_result",
+          errorType: "provider_error"
+        }
+      }
+    );
+  });
 });

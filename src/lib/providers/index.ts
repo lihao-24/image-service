@@ -32,6 +32,7 @@ export type ImagesProviderAdapter = {
 
 export type OpenAICompatibleImagesAdapterOptions = {
   fetch?: typeof fetch;
+  logger?: Pick<typeof console, "warn">;
 };
 
 type ImagesApiResponse = {
@@ -49,10 +50,12 @@ export function createOpenAICompatibleImagesAdapter(
   options: OpenAICompatibleImagesAdapterOptions = {}
 ): ImagesProviderAdapter {
   const fetchClient = options.fetch ?? fetch;
+  const logger = options.logger ?? console;
 
   return {
     async generateImage(provider, request) {
-      const response = await fetchClient(buildProviderUrl(provider, "/images/generations"), {
+      const endpoint = "/images/generations";
+      const response = await fetchClient(buildProviderUrl(provider, endpoint), {
         method: "POST",
         headers: {
           authorization: `Bearer ${provider.apiKey}`,
@@ -63,12 +66,18 @@ export function createOpenAICompatibleImagesAdapter(
       const json = await readProviderJson(response);
 
       return {
-        b64Json: requireB64Json(json, 0),
+        b64Json: requireB64Json(json, 0, {
+          provider,
+          endpoint,
+          response,
+          logger
+        }),
         raw: json
       };
     },
 
     async editImage(provider, request) {
+      const endpoint = "/images/edits";
       const body = new FormData();
       body.set("model", request.model);
       body.set("prompt", request.prompt);
@@ -83,7 +92,7 @@ export function createOpenAICompatibleImagesAdapter(
       }
       body.set("image", request.image, request.imageFilename ?? "reference-image");
 
-      const response = await fetchClient(buildProviderUrl(provider, "/images/edits"), {
+      const response = await fetchClient(buildProviderUrl(provider, endpoint), {
         method: "POST",
         headers: {
           authorization: `Bearer ${provider.apiKey}`
@@ -93,7 +102,12 @@ export function createOpenAICompatibleImagesAdapter(
       const json = await readProviderJson(response);
 
       return {
-        b64Json: extractB64Json(json, 1) ?? requireB64Json(json, 0),
+        b64Json: extractB64Json(json, 1) ?? requireB64Json(json, 0, {
+          provider,
+          endpoint,
+          response,
+          logger
+        }),
         raw: json
       };
     }
@@ -161,10 +175,15 @@ function normalizeProviderError(response: Response, json: ImagesApiResponse): Er
   return new Error("provider_request_failed");
 }
 
-function requireB64Json(response: ImagesApiResponse, index: number): string {
-  const image = extractB64Json(response, index);
+function requireB64Json(
+  apiResponse: ImagesApiResponse,
+  index: number,
+  context: ProviderDiagnosticContext
+): string {
+  const image = extractB64Json(apiResponse, index);
 
   if (!image) {
+    logInvalidProviderResponse(context, apiResponse);
     throw new Error("provider_response_invalid");
   }
 
@@ -179,4 +198,45 @@ function extractB64Json(response: ImagesApiResponse, index: number): string | un
   }
 
   return image;
+}
+
+type ProviderDiagnosticContext = {
+  provider: ProviderConfig;
+  endpoint: string;
+  response: Response;
+  logger: Pick<typeof console, "warn">;
+};
+
+function logInvalidProviderResponse(
+  context: ProviderDiagnosticContext,
+  apiResponse: ImagesApiResponse
+) {
+  context.logger.warn("[image-provider] invalid provider response", {
+    providerId: context.provider.id,
+    endpoint: context.endpoint,
+    status: context.response.status,
+    ok: context.response.ok,
+    contentType: context.response.headers.get("content-type") ?? "",
+    response: summarizeProviderResponse(apiResponse)
+  });
+}
+
+function summarizeProviderResponse(apiResponse: ImagesApiResponse) {
+  return {
+    topLevelKeys: Object.keys(apiResponse).sort(),
+    dataLength: Array.isArray(apiResponse.data) ? apiResponse.data.length : null,
+    dataItems: Array.isArray(apiResponse.data)
+      ? apiResponse.data.slice(0, 3).map((item, index) => ({
+          index,
+          keys: item && typeof item === "object" ? Object.keys(item).sort() : [],
+          hasB64Json: typeof item?.b64_json === "string" && item.b64_json.length > 0
+        }))
+      : [],
+    errorCode: readDiagnosticString(apiResponse.error?.code),
+    errorType: readDiagnosticString(apiResponse.error?.type)
+  };
+}
+
+function readDiagnosticString(value: unknown): string | null {
+  return typeof value === "string" && value.trim() ? value.trim() : null;
 }
