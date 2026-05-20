@@ -131,11 +131,11 @@ export function ChatSidebar({
         ) : null}
       </div>
 
-      <section className="shrink-0 rounded-lg border border-white/10 bg-white/[0.04] p-3">
+      <section className="shrink-0 rounded-xl border border-white/10 bg-white/[0.04] p-3">
         <div className="mb-2 flex items-center justify-between gap-3">
           <h2 className="m-0 text-sm font-semibold text-white">设置</h2>
           <button
-            className="min-h-9 rounded-lg px-2.5 text-xs font-semibold text-slate-200 hover:bg-white/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300"
+            className="min-h-9 rounded-lg px-2.5 text-xs font-semibold text-slate-200 transition hover:bg-white/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300"
             onClick={() => onSettingsExpandedChange(!settingsExpanded)}
             type="button"
           >
@@ -149,7 +149,7 @@ export function ChatSidebar({
               <span>Model</span>
               <select
                 aria-label="Model"
-                className="min-h-10 rounded-lg border border-white/10 bg-slate-900 px-3 text-sm text-white"
+                className="min-h-10 rounded-lg border border-white/10 bg-slate-900 px-3 text-sm text-white focus:border-indigo-300 focus:outline-none"
                 onChange={(event) => onParamChange({ model: event.target.value })}
                 value={params.model}
               >
@@ -166,7 +166,7 @@ export function ChatSidebar({
             <span>画面比例</span>
             <select
               aria-label="画面比例"
-              className="min-h-10 rounded-lg border border-white/10 bg-slate-900 px-3 text-sm text-white"
+              className="min-h-10 rounded-lg border border-white/10 bg-slate-900 px-3 text-sm text-white focus:border-indigo-300 focus:outline-none"
               onChange={(event) =>
                 onParamChange({
                   size: event.target.value,
@@ -192,7 +192,7 @@ export function ChatSidebar({
                 <span>分辨率</span>
                 <select
                   aria-label="分辨率"
-                  className="min-h-10 rounded-lg border border-white/10 bg-slate-900 px-3 text-sm text-white"
+                  className="min-h-10 rounded-lg border border-white/10 bg-slate-900 px-3 text-sm text-white focus:border-indigo-300 focus:outline-none"
                   onChange={(event) => onParamChange({ resolution: event.target.value })}
                   value={selectedResolution}
                 >
@@ -208,7 +208,7 @@ export function ChatSidebar({
                 <span>画质</span>
                 <select
                   aria-label="画质"
-                  className="min-h-10 rounded-lg border border-white/10 bg-slate-900 px-3 text-sm text-white"
+                  className="min-h-10 rounded-lg border border-white/10 bg-slate-900 px-3 text-sm text-white focus:border-indigo-300 focus:outline-none"
                   onChange={(event) => onParamChange({ quality: event.target.value })}
                   value={params.quality}
                 >
@@ -224,7 +224,7 @@ export function ChatSidebar({
                 <span>输出格式</span>
                 <select
                   aria-label="输出格式"
-                  className="min-h-10 rounded-lg border border-white/10 bg-slate-900 px-3 text-sm text-white"
+                  className="min-h-10 rounded-lg border border-white/10 bg-slate-900 px-3 text-sm text-white focus:border-indigo-300 focus:outline-none"
                   onChange={(event) => onParamChange({ outputFormat: event.target.value })}
                   value={params.outputFormat}
                 >
@@ -240,7 +240,7 @@ export function ChatSidebar({
                 <span>背景</span>
                 <select
                   aria-label="背景"
-                  className="min-h-10 rounded-lg border border-white/10 bg-slate-900 px-3 text-sm text-white"
+                  className="min-h-10 rounded-lg border border-white/10 bg-slate-900 px-3 text-sm text-white focus:border-indigo-300 focus:outline-none"
                   onChange={(event) => onParamChange({ background: event.target.value })}
                   value={params.background ?? "auto"}
                 >
@@ -256,7 +256,7 @@ export function ChatSidebar({
                 <span>安全审核</span>
                 <select
                   aria-label="安全审核"
-                  className="min-h-10 rounded-lg border border-white/10 bg-slate-900 px-3 text-sm text-white"
+                  className="min-h-10 rounded-lg border border-white/10 bg-slate-900 px-3 text-sm text-white focus:border-indigo-300 focus:outline-none"
                   onChange={(event) => onParamChange({ moderation: event.target.value })}
                   value={params.moderation ?? "auto"}
                 >
@@ -280,7 +280,7 @@ export function ChatSidebar({
         <div className="mb-2 grid min-w-0 shrink-0 grid-cols-2 gap-2">
           <button
             aria-pressed={templateListView === "default"}
-            className={`min-h-9 min-w-0 rounded-lg px-2.5 text-sm font-semibold ${
+            className={`min-h-9 min-w-0 rounded-lg px-2.5 text-sm font-semibold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300 ${
               templateListView === "default"
                 ? "bg-white text-slate-950"
                 : "bg-white/10 text-slate-300 hover:bg-white/15 hover:text-white"
@@ -292,7 +292,7 @@ export function ChatSidebar({
           </button>
           <button
             aria-pressed={templateListView === "mine"}
-            className={`min-h-9 min-w-0 rounded-lg px-2.5 text-sm font-semibold ${
+            className={`min-h-9 min-w-0 rounded-lg px-2.5 text-sm font-semibold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300 ${
               templateListView === "mine"
                 ? "bg-white text-slate-950"
                 : "bg-white/10 text-slate-300 hover:bg-white/15 hover:text-white"
@@ -309,7 +309,7 @@ export function ChatSidebar({
               {categories.map((category) => (
                 <button
                   aria-label={`打开模板分类 ${category.name}`}
-                  className="min-h-10 min-w-0 w-full overflow-hidden rounded-lg px-2.5 py-1.5 text-left text-sm font-semibold text-slate-300 hover:bg-white/10 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300"
+                  className="min-h-10 min-w-0 w-full overflow-hidden rounded-lg px-2.5 py-1.5 text-left text-sm font-semibold text-slate-300 transition hover:bg-white/10 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300"
                   key={category.id}
                   onClick={() =>
                     onOpenTemplates({
@@ -333,14 +333,14 @@ export function ChatSidebar({
           ) : (
             <div className="grid min-w-0 gap-2">
               {mineTemplates.length === 0 ? (
-                <p className="m-0 min-w-0 truncate overflow-hidden rounded-lg bg-white/5 px-3 py-3 text-sm text-slate-400">
+                <p className="m-0 min-w-0 overflow-hidden rounded-lg border border-dashed border-white/10 bg-white/5 px-3 py-3 text-sm leading-5 text-slate-400">
                   暂无我的模板
                 </p>
               ) : null}
               {mineTemplates.map((template) => (
                 <button
                   aria-label={`打开我的模板 ${template.title}`}
-                  className="min-h-10 min-w-0 w-full overflow-hidden rounded-lg px-2.5 py-1.5 text-left text-sm font-semibold text-slate-300 hover:bg-white/10 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300"
+                  className="min-h-10 min-w-0 w-full overflow-hidden rounded-lg px-2.5 py-1.5 text-left text-sm font-semibold text-slate-300 transition hover:bg-white/10 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300"
                   key={template.id}
                   onClick={() =>
                     onOpenTemplates({
@@ -366,7 +366,7 @@ export function ChatSidebar({
         <p className="m-0 truncate text-sm font-semibold text-white">{userLabel}</p>
         <button
           aria-label="查看今日用量"
-          className="mt-2 block w-full rounded-lg p-0 text-left hover:bg-white/5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300"
+          className="mt-2 block w-full rounded-lg p-0 text-left transition hover:bg-white/5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300"
           onClick={() => setUsageOpen(true)}
           type="button"
         >
@@ -382,7 +382,7 @@ export function ChatSidebar({
         </button>
         <form action="/auth/logout" method="post">
           <button
-            className="mt-3 min-h-9 w-full rounded-lg border border-white/10 px-3 text-sm font-semibold text-slate-200 hover:bg-white/10"
+            className="mt-3 min-h-9 w-full rounded-lg border border-white/10 px-3 text-sm font-semibold text-slate-200 transition hover:bg-white/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300"
             type="submit"
           >
             退出
@@ -395,7 +395,7 @@ export function ChatSidebar({
           <div
             aria-label="今日用量"
             aria-modal="true"
-            className="w-full max-w-sm rounded-lg border border-white/10 bg-slate-950 p-5 text-slate-100 shadow-2xl"
+            className="w-full max-w-sm rounded-2xl border border-white/10 bg-slate-950 p-5 text-slate-100 shadow-2xl"
             role="dialog"
           >
             <div className="flex items-center justify-between gap-3">

@@ -314,6 +314,7 @@ describe("ImageWorkbench chat canvas", () => {
     renderWorkbench();
 
     expect(await screen.findByText("今天想生成什么？")).toBeTruthy();
+    expect(screen.queryByText("Focal workspace")).toBeNull();
     const promptInput = screen.getByLabelText("Prompt") as HTMLTextAreaElement;
     fireEvent.change(promptInput, { target: { value: "一只透明玻璃杯，柔和自然光" } });
     fireEvent.click(screen.getByRole("button", { name: "生成图片" }));
@@ -321,6 +322,7 @@ describe("ImageWorkbench chat canvas", () => {
     expect(screen.queryByText("今天想生成什么？")).toBeNull();
     expect(screen.getByText("一只透明玻璃杯，柔和自然光")).toBeTruthy();
     expect(screen.getByText("AI 正在生成图片...")).toBeTruthy();
+    expect(screen.getByLabelText("图片生成占位状态")).toBeTruthy();
     expect(promptInput.value).toBe("");
 
     deferred.resolve(successGenerationResponse());
@@ -384,9 +386,32 @@ describe("ImageWorkbench chat canvas", () => {
 
     expect(await screen.findByText("图片生成服务暂时不可用，请稍后再试。")).toBeTruthy();
     expect(screen.getByText("请调整 prompt 或稍后重试。")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "编辑失败请求" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "复制失败请求 Prompt" })).toBeTruthy();
     expect(screen.queryByText(/sub2api\.toioto/)).toBeNull();
     expect(screen.queryByText(/sk-secret/)).toBeNull();
     expect(screen.queryByText(/stack trace/)).toBeNull();
+  });
+
+  it("失败消息可回填 prompt，便于调整后重试", async () => {
+    mockFetchByRoute({
+      generationResponse: Promise.resolve(
+        jsonResponse({ error: "provider_request_failed", message: "provider failed" }, 502)
+      )
+    });
+
+    renderWorkbench();
+    fireEvent.change(screen.getByLabelText("Prompt"), {
+      target: { value: "一张安静的书桌" }
+    });
+    fireEvent.click(screen.getByRole("button", { name: "生成图片" }));
+
+    await screen.findByText("图片生成服务暂时不可用，请稍后再试。");
+    fireEvent.click(screen.getByRole("button", { name: "编辑失败请求" }));
+
+    expect((screen.getByLabelText("Prompt") as HTMLTextAreaElement).value).toBe(
+      "一张安静的书桌"
+    );
   });
 
   it("用户消息编辑回填 prompt 和参数", async () => {
@@ -710,6 +735,24 @@ describe("ImageWorkbench chat canvas", () => {
     );
   });
 
+  it("参考图长文件名会被截断且保留完整 title", async () => {
+    mockFetchByRoute();
+
+    renderWorkbench();
+    fireEvent.click(screen.getAllByRole("button", { name: "图生图" }).at(-1)!);
+    const fileName =
+      "this-is-a-very-long-reference-image-name-used-to-verify-mobile-truncation.png";
+    fireEvent.change(screen.getByLabelText("参考图文件"), {
+      target: {
+        files: [new File(["image"], fileName, { type: "image/png" })]
+      }
+    });
+
+    const fileChip = screen.getByTitle(fileName);
+    expect(fileChip.className).toContain("truncate");
+    expect(fileChip.textContent).toContain(fileName);
+  });
+
   it("AI 图片消息保存配置打开 Modal，recipe 请求不包含图片、base64 或参考图", async () => {
     const fetchMock = mockFetchByRoute({
       afterSaveLibrary: createTemplateLibraryResponse({ mine: [mineTemplate] })
@@ -755,6 +798,31 @@ describe("ImageWorkbench chat canvas", () => {
     expect(body).not.toHaveProperty("reference_preview");
   });
 
+  it("保存配置时保存按钮展示禁用加载态", async () => {
+    const deferred = createDeferred<Response>();
+    mockFetchByRoute({
+      recipeResponse: deferred.promise,
+      afterSaveLibrary: createTemplateLibraryResponse({ mine: [mineTemplate] })
+    });
+
+    renderWorkbench();
+    fireEvent.change(screen.getByLabelText("Prompt"), {
+      target: { value: "透明玻璃杯，产品摄影" }
+    });
+    fireEvent.click(screen.getByRole("button", { name: "生成图片" }));
+    await screen.findByRole("img", { name: "AI 生成图片" });
+    fireEvent.click(screen.getByRole("button", { name: "保存配置" }));
+
+    const modal = await screen.findByRole("dialog", { name: "保存配置" });
+    fireEvent.click(within(modal).getByRole("button", { name: "保存" }));
+
+    const savingButton = within(modal).getByRole("button", { name: "保存中..." });
+    expect(savingButton).toHaveProperty("disabled", true);
+
+    deferred.resolve(jsonResponse({ recipe: { id: "recipe_saved", title: "玻璃杯配置" } }));
+    await screen.findByText("配置已保存。");
+  });
+
   it("页面不渲染 provider baseUrl、apiKeyEnv 或 API key", async () => {
     mockFetchByRoute();
 
@@ -774,6 +842,7 @@ type MockFetchOptions = {
   usageResponse?: unknown;
   generationResponse?: Promise<Response>;
   editResponse?: Promise<Response>;
+  recipeResponse?: Promise<Response>;
 };
 
 function mockFetchByRoute(options: MockFetchOptions = {}) {
@@ -826,10 +895,13 @@ function mockFetchByRoute(options: MockFetchOptions = {}) {
     }
 
     if (url === "/api/recipes") {
-      return Promise.resolve(
-        jsonResponse({
-          recipe: { id: "recipe_saved", title: "玻璃杯配置" }
-        })
+      return (
+        options.recipeResponse ??
+        Promise.resolve(
+          jsonResponse({
+            recipe: { id: "recipe_saved", title: "玻璃杯配置" }
+          })
+        )
       );
     }
 

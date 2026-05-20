@@ -401,6 +401,29 @@ export default function ImageWorkbench({ config, userLabel }: ImageWorkbenchProp
     });
   }
 
+  function editAssistantMessage(assistantMessageId: string) {
+    const assistantMessage = messages.find(
+      (message): message is WorkbenchAssistantMessage =>
+        message.role === "assistant" && message.id === assistantMessageId
+    );
+    if (!assistantMessage) {
+      return;
+    }
+
+    setPrompt(assistantMessage.prompt);
+    setMode(assistantMessage.mode);
+    updateParams(assistantMessage.params);
+    if (assistantMessage.mode === "image-edit") {
+      setReferenceImage(null);
+      if (composerPreviewUrlRef.current) {
+        URL.revokeObjectURL(composerPreviewUrlRef.current);
+        composerPreviewUrlRef.current = "";
+      }
+      setReferencePreviewUrl("");
+      setEditNotice("参考图需要重新选择。");
+    }
+  }
+
   async function saveRecipe(title: string) {
     if (!saveTarget) {
       return;
@@ -454,7 +477,7 @@ export default function ImageWorkbench({ config, userLabel }: ImageWorkbenchProp
   }
 
   return (
-    <main className="flex h-dvh w-screen overflow-hidden bg-white text-slate-950">
+    <main className="flex h-dvh w-screen overflow-hidden bg-slate-50 text-slate-950">
       {!isMobileViewport && sidebarOpen ? (
         <ChatSidebar
           className="hidden h-full w-[280px] shrink-0 flex-col overflow-hidden bg-slate-950 px-4 py-4 text-slate-100 shadow-2xl md:flex"
@@ -476,7 +499,7 @@ export default function ImageWorkbench({ config, userLabel }: ImageWorkbenchProp
         <div className="fixed inset-0 z-40 md:hidden">
           <button
             aria-label="关闭侧边栏遮罩"
-            className="absolute inset-0 bg-slate-950/45"
+            className="absolute inset-0 bg-slate-950/45 backdrop-blur-[2px]"
             onClick={() => setMobileDrawerOpen(false)}
             type="button"
           />
@@ -502,7 +525,7 @@ export default function ImageWorkbench({ config, userLabel }: ImageWorkbenchProp
       ) : null}
 
       <section className="flex min-w-0 flex-1 flex-col bg-white">
-        <header className="flex min-h-14 items-center justify-between border-b border-slate-200 px-4">
+        <header className="flex min-h-14 items-center justify-between border-b border-slate-200 bg-white/95 px-4 backdrop-blur">
           <div className="flex items-center gap-3">
             <button
               aria-label={
@@ -514,7 +537,7 @@ export default function ImageWorkbench({ config, userLabel }: ImageWorkbenchProp
                     ? "隐藏侧边栏"
                     : "显示侧边栏"
               }
-              className="grid h-9 w-9 place-items-center rounded-lg text-slate-700 hover:bg-slate-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-600"
+              className="grid h-10 w-10 place-items-center rounded-lg text-slate-700 transition hover:bg-slate-100 active:bg-slate-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-600"
               onClick={() => {
                 if (isMobileViewport) {
                   setMobileDrawerOpen((current) => !current);
@@ -530,7 +553,7 @@ export default function ImageWorkbench({ config, userLabel }: ImageWorkbenchProp
           </div>
           <button
             aria-label="更多"
-            className="grid h-9 w-9 place-items-center rounded-lg text-slate-500 hover:bg-slate-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-600"
+            className="grid h-10 w-10 place-items-center rounded-lg text-slate-500 transition hover:bg-slate-100 active:bg-slate-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-600"
             type="button"
           >
             <MoreIcon />
@@ -540,6 +563,7 @@ export default function ImageWorkbench({ config, userLabel }: ImageWorkbenchProp
         <div className="min-h-0 flex-1 overflow-y-auto bg-white">
           <MessageList
             messages={messages}
+            onEditAssistantMessage={editAssistantMessage}
             onEditUserMessage={editUserMessage}
             onOpenTemplateCategory={(categoryId, title) =>
               setTemplateModal({ open: true, source: "category", categoryId, title })

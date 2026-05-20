@@ -1,5 +1,5 @@
 import type { ChangeEvent, FormEvent } from "react";
-import { LoaderIcon, SendIcon } from "./icons";
+import { LoaderIcon, SendIcon, UploadIcon } from "./icons";
 import type { GenerationMode } from "./types";
 
 type PromptComposerProps = {
@@ -36,13 +36,15 @@ export function PromptComposer({
   }
 
   return (
-    <div className="border-t border-slate-200 bg-gradient-to-t from-white via-white to-white/70 px-4 pb-4 pt-3">
+    <div className="border-t border-slate-200 bg-gradient-to-t from-white via-white to-white/75 px-4 pb-4 pt-3 max-sm:px-3">
       <form className="mx-auto max-w-4xl" onSubmit={handleSubmit}>
-        <div className="mb-2 inline-flex rounded-full bg-slate-100 p-1">
+        <div className="mb-2 inline-flex rounded-full bg-slate-100 p-1 shadow-inner shadow-slate-200/60">
           <button
             aria-pressed={mode === "text-to-image"}
-            className={`min-h-9 rounded-full px-3 text-sm font-semibold ${
-              mode === "text-to-image" ? "bg-white text-slate-950 shadow-sm" : "text-slate-600"
+            className={`min-h-9 rounded-full px-3 text-sm font-semibold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-600 ${
+              mode === "text-to-image"
+                ? "bg-white text-slate-950 shadow-sm"
+                : "text-slate-600 hover:text-slate-950"
             }`}
             onClick={() => onModeChange("text-to-image")}
             type="button"
@@ -51,8 +53,10 @@ export function PromptComposer({
           </button>
           <button
             aria-pressed={mode === "image-edit"}
-            className={`min-h-9 rounded-full px-3 text-sm font-semibold ${
-              mode === "image-edit" ? "bg-white text-slate-950 shadow-sm" : "text-slate-600"
+            className={`min-h-9 rounded-full px-3 text-sm font-semibold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-600 ${
+              mode === "image-edit"
+                ? "bg-white text-slate-950 shadow-sm"
+                : "text-slate-600 hover:text-slate-950"
             }`}
             onClick={() => onModeChange("image-edit")}
             type="button"
@@ -61,10 +65,11 @@ export function PromptComposer({
           </button>
         </div>
 
-        <div className="rounded-[20px] border border-slate-200 bg-white p-3 shadow-lg shadow-slate-200/70">
+        <div className="rounded-[20px] border border-slate-200 bg-white p-3 shadow-lg shadow-slate-200/70 transition focus-within:border-indigo-300 focus-within:shadow-indigo-100/70">
           {mode === "image-edit" ? (
-            <div className="mb-3 flex flex-wrap items-center gap-3">
-              <label className="inline-flex min-h-9 cursor-pointer items-center rounded-lg border border-slate-200 px-3 text-sm font-semibold text-slate-700 hover:bg-slate-50">
+            <div className="mb-3 flex min-w-0 flex-wrap items-center gap-3">
+              <label className="inline-flex min-h-10 cursor-pointer items-center gap-2 rounded-lg border border-slate-200 px-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 focus-within:outline focus-within:outline-2 focus-within:outline-indigo-600">
+                <UploadIcon className="h-4 w-4" />
                 <span>上传参考图</span>
                 <input
                   aria-label="参考图文件"
@@ -76,7 +81,9 @@ export function PromptComposer({
                 />
               </label>
               {referenceImage ? (
-                <span className="flex items-center gap-2 rounded-lg bg-slate-50 px-2 py-1 text-sm text-slate-600">
+                <span
+                  className="flex min-w-0 max-w-full items-center gap-2 overflow-hidden rounded-lg bg-slate-50 px-2 py-1 text-sm text-slate-600"
+                >
                   {referencePreviewUrl ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
@@ -85,7 +92,9 @@ export function PromptComposer({
                       src={referencePreviewUrl}
                     />
                   ) : null}
-                  {referenceImage.name}
+                  <span className="min-w-0 truncate" title={referenceImage.name}>
+                    {referenceImage.name}
+                  </span>
                 </span>
               ) : (
                 <span className="text-sm text-slate-500">图生图参考图只用于本次请求。</span>
@@ -93,13 +102,13 @@ export function PromptComposer({
             </div>
           ) : null}
 
-          <div className="flex items-end gap-3">
+          <div className="flex items-end gap-3 max-sm:gap-2">
             <label className="sr-only" htmlFor="workbench-prompt">
               Prompt
             </label>
             <textarea
               aria-label="Prompt"
-              className="max-h-48 min-h-24 flex-1 resize-none border-0 bg-transparent px-2 py-2 text-base leading-7 text-slate-950 outline-none placeholder:text-slate-400"
+              className="max-h-48 min-h-24 min-w-0 flex-1 resize-none border-0 bg-transparent px-2 py-2 text-base leading-7 text-slate-950 outline-none placeholder:text-slate-400"
               id="workbench-prompt"
               maxLength={4000}
               onChange={(event) => onPromptChange(event.target.value)}
@@ -108,7 +117,7 @@ export function PromptComposer({
             />
             <button
               aria-label="生成图片"
-              className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-indigo-600 text-sm font-bold text-white shadow-md shadow-indigo-200 hover:bg-indigo-700 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:shadow-none"
+              className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-indigo-600 text-sm font-bold text-white shadow-md shadow-indigo-200 transition hover:bg-indigo-700 active:bg-indigo-800 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:shadow-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-600"
               disabled={generating || prompt.trim().length === 0}
               type="submit"
             >
