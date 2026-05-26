@@ -1,9 +1,10 @@
 # image-service
 
-`image-service` 是个人 AI 服务体系中的生图网页服务。
+`image-service`（品牌名 Focal）是个人 AI 服务体系中的生图网页服务。
 
 当前已创建 Next.js 应用骨架、登录边界、SQLite 数据层、provider allowlist、
-OpenAI 兼容 Images API adapter、生成 API、Prompt 配方保存 API 和登录后的中文生图工作台。
+OpenAI 兼容 Images API adapter、生成 API、Prompt 配方保存 API、Prompt 模板库、
+用量统计和登录后的中文聊天式生图工作台。
 测试使用 mock provider，不调用真实 provider。
 
 ## 本地开发
@@ -53,10 +54,29 @@ git diff --check
 或 API key 元数据。生成 API 不会自动保存 Prompt 配方，只有显式调用 recipe API
 才写入 `prompt_recipes`。
 
+## Prompt 模板
+
+应用内置 Prompt 模板库，支持按分类浏览和收藏。
+
+- `GET /api/prompt-templates`：列出模板库。
+- `GET /api/prompt-templates/favorites`：列出当前用户收藏的模板。
+- `POST /api/prompt-templates/favorites/[templateId]`：收藏模板。
+- `DELETE /api/prompt-templates/favorites/[templateId]`：取消收藏模板。
+
+模板渲染走 `src/lib/prompt-templates/render.ts`，支持变量替换。
+
+## 用量 API
+
+- `GET /api/usage`：返回当前用户当日用量统计。
+
+gpt-image 系列模型不计入每日配额。生成日志写入 SQLite `generation_logs` 表，包含
+provider、model、mode、size、quality、status、error_code 和 duration_ms。
+
 ## 前端生图工作台
 
-登录后访问 `/` 会进入生图工作台。页面参数控件来自 `/api/image-options` 的公开
-allowlist，支持文生图、参考图生图、临时预览、下载当前临时图片和手动保存配置。
+登录后访问 `/` 会进入聊天式生图工作台。页面参数控件来自 `/api/image-options` 的公开
+allowlist，支持文生图、参考图生图、Prompt 模板浏览和收藏、用量查看、临时预览、
+下载当前临时图片和手动保存配置。
 生成成功不会自动保存 Prompt 配方；生成图片 base64 只保留在当前浏览器状态中，不写入
 `localStorage`、SQLite、服务器磁盘或日志。
 
@@ -186,6 +206,7 @@ docker compose --env-file .env.production -f compose/prod/image-service.prod.com
 ## 模块边界
 
 - `src/app/`：页面、路由和健康检查。
+- `src/app/workbench/`：工作台拆分组件、类型、helper、弹窗和图标。
 - `src/lib/auth/`：Supabase Auth 服务端 helper、cookie session 刷新和用户校验。
 - `src/lib/config/`：服务端配置解析、provider allowlist、公开投影和参数校验。
 - `src/lib/db/`：SQLite 连接、schema 和按用户隔离的查询 helper。
@@ -193,11 +214,14 @@ docker compose --env-file .env.production -f compose/prod/image-service.prod.com
 - `src/lib/usage/`：每日额度和 generation log。
 - `src/lib/recipes/`：Prompt 配方校验和按用户隔离的 CRUD helper。
 - `src/lib/images/`：图片请求校验和响应辅助。
+- `src/lib/prompt-templates/`：内置模板、分类、模板渲染和模板索引。
+- `src/lib/diagnostics/`：结构化图片生成失败诊断日志。
 
 参考文档：
 
-- `docs/specs/2026-05-17-image-service-mvp-design.md`
-- `docs/reference/openai-compatible-images-api.md`
-- `docs/reference/data-and-storage.md`
-- `docs/controller/master-window-prompt.md`
-- `docs/controller/phase0-progress.md`
+- `docs/README.md`：文档索引。
+- `docs/specs/2026-05-17-image-service-mvp-design.md`：MVP 设计规格。
+- `docs/specs/2026-05-18-chat-style-image-workbench-redesign.md`：聊天式工作台重设计。
+- `docs/specs/2026-05-19-gpt-image-2-and-usage-hardening-design.md`：gpt-image-2 和用量加固设计。
+- `docs/reference/openai-compatible-images-api.md`：OpenAI 兼容图片接口约束。
+- `docs/reference/data-and-storage.md`：数据和存储约束。

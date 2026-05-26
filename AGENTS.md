@@ -24,6 +24,9 @@
 - `src/app/api/images/`：文生图和参考图生图 API。
 - `src/app/api/recipes/`：Prompt 配方 CRUD API。
 - `src/app/api/prompt-templates/`：Prompt 模板库和收藏 API。
+- `src/app/api/usage/`：每日用量统计 API。
+- `src/app/api/auth/me/`：当前用户信息 API。
+- `src/app/api/image-options/`：公开配置和选项 API。
 - `src/lib/auth/`：Supabase Auth、cookie session、用户校验和中间件。
 - `src/lib/config/`：服务端图片配置解析、provider allowlist、公开配置投影和参数校验。
 - `src/lib/db/`：SQLite 连接、schema、按用户隔离的数据访问 helper。
@@ -32,6 +35,7 @@
 - `src/lib/usage/`：每日额度、用量统计和生成日志。
 - `src/lib/recipes/`：Prompt 配方校验和按用户隔离的 CRUD helper。
 - `src/lib/prompt-templates/`：内置模板、分类、模板渲染和模板索引。
+- `src/lib/diagnostics/`：结构化图片生成失败诊断日志。
 - `tests/`：按功能域拆分的 Vitest 测试。
 
 ## 架构边界
@@ -45,7 +49,7 @@
 - 生成图片本体当前只作为临时响应返回，不写入 SQLite、服务器磁盘、日志或 localStorage。
 - 上传参考图当前只用于本次请求和浏览器临时预览，不持久化文件。
 - Prompt 模板渲染优先走 `src/lib/prompt-templates/render.ts`，不要在组件或 route 中重复拼接模板逻辑。
-- 工作台 UI 改动优先复用 `src/app/workbench/` 现有组件、类型和 helper，避免把新状态和业务逻辑继续堆进单个文件。
+- `src/app/image-workbench.tsx` 是工作台主状态和流程编排文件；工作台 UI 改动优先复用 `src/app/workbench/` 下的拆分组件、类型和 helper，避免把新状态和业务逻辑继续堆进单个文件。
 
 ## 安全与配置
 
