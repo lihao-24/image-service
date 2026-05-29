@@ -367,7 +367,7 @@ type ProviderDiagnosticContext = {
 
 function logInvalidProviderResponse(
   context: ProviderDiagnosticContext,
-  apiResponse: ImagesApiResponse
+  apiResponse: unknown
 ) {
   context.logger.warn("[image-provider] invalid provider response", {
     requestId: context.requestId,
@@ -404,19 +404,22 @@ function logProviderErrorResponse(
   });
 }
 
-function summarizeProviderResponse(apiResponse: ImagesApiResponse) {
+function summarizeProviderResponse(apiResponse: unknown) {
+  const response =
+    apiResponse && typeof apiResponse === "object" ? (apiResponse as ImagesApiResponse) : {};
+
   return {
-    topLevelKeys: Object.keys(apiResponse).sort(),
-    dataLength: Array.isArray(apiResponse.data) ? apiResponse.data.length : null,
-    dataItems: Array.isArray(apiResponse.data)
-      ? apiResponse.data.slice(0, 3).map((item, index) => ({
+    topLevelKeys: Object.keys(response).sort(),
+    dataLength: Array.isArray(response.data) ? response.data.length : null,
+    dataItems: Array.isArray(response.data)
+      ? response.data.slice(0, 3).map((item, index) => ({
           index,
           keys: item && typeof item === "object" ? Object.keys(item).sort() : [],
           hasB64Json: typeof item?.b64_json === "string" && item.b64_json.length > 0
         }))
       : [],
-    errorCode: readDiagnosticString(apiResponse.error?.code),
-    errorType: readDiagnosticString(apiResponse.error?.type)
+    errorCode: readDiagnosticString(response.error?.code),
+    errorType: readDiagnosticString(response.error?.type)
   };
 }
 

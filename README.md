@@ -32,13 +32,34 @@ git diff --check
 
 ## Provider 配置
 
-服务端通过 `IMAGE_PROVIDER_OPTIONS` 配置 provider allowlist，并用
-`IMAGE_DEFAULT_PROVIDER`、`IMAGE_DEFAULT_MODEL`、`IMAGE_DEFAULT_SIZE`、
-`IMAGE_DEFAULT_RESOLUTION`、`IMAGE_DEFAULT_QUALITY`、`IMAGE_DEFAULT_OUTPUT_FORMAT`、
-`IMAGE_DEFAULT_BACKGROUND`、`IMAGE_DEFAULT_MODERATION` 配置默认值。公开接口
-`/api/image-options` 只返回 `defaultProvider`、`defaults`、provider
-`id/label/models` 和尺寸、分辨率、质量、格式、背景、安全审核选项，不包含
+服务端通过 `IMAGE_PROVIDER_OPTIONS` 配置 provider-model 二级 allowlist，并用
+`IMAGE_DEFAULT_PROVIDER`、`IMAGE_DEFAULT_MODEL` 选择默认模型。默认仍是
+`toioto / gpt-image-2`。
+
+provider 的 `id` 是稳定配置值，`label` 是界面展示名；两者不要混用。每个
+provider 持有连接信息和自己的 `models` 列表，model 持有 `id`、`label`、
+`family`、启用状态和文生图/参考图生图能力。公开接口 `/api/image-options`
+只返回 `defaultProvider`、`defaults` 和 provider/model 的公开字段，不包含
 `baseUrl`、`apiKeyEnv` 或 API key。
+
+当前 env 模板包含两个 provider：
+
+- `toioto`：展示名 `Toioto`，`type` 为 `openai-compatible-images`，`baseUrl`
+  为 `https://sub2api.toioto.org/v1`，`apiKeyEnv` 为 `SUB2API_API_KEY`，模型为
+  `gpt-image-2`。
+- `fastcode`：展示名 `FastCode`，`type` 为 `openai-compatible-images`，`baseUrl`
+  为 `https://timebackward.com`，`apiKeyEnv` 为 `FASTCODE_API_KEY`。模板中保留
+  `FASTCODE_API_KEY=""` 占位，真实值只写入本地或部署环境。
+
+Gemini adapter 已预留 `gemini-generate-content` 类型。FastCode 的 Gemini 图片模型
+需要先 smoke 确认第三方实际暴露的是 OpenAI-compatible Images API 形状，还是
+Gemini `generateContent` 形状；确认后再用正确的 provider `type`、`authStyle` 和模型
+配置加入 env。未确认前，env 模板不默认启用 Gemini 模型，也不要仅凭价格页或模型名假设
+Gemini 一定兼容 OpenAI Images API。
+
+主生成流程只向上游发送 `provider`、`model`、`prompt`，参考图生图额外发送
+`image`。旧的 size、resolution、quality、output format、background 和
+moderation 配置不再作为主流程参数发送给上游。
 
 ## Prompt 配方 API
 
@@ -48,8 +69,7 @@ git diff --check
 - `PATCH /api/recipes/[recipeId]`：更新自己的 Prompt 配方。
 - `DELETE /api/recipes/[recipeId]`：删除自己的 Prompt 配方。
 
-保存和更新会在服务端按 allowlist 校验 `provider`、`model`、`size`、
-`resolution`、`quality`、`output_format`、`background` 和 `moderation`。
+保存和更新会在服务端按 allowlist 校验 `provider` 和 `model`。
 `user_id` 只来自服务端 Auth helper；接口不会接受客户端 provider 配置、base URL
 或 API key 元数据。生成 API 不会自动保存 Prompt 配方，只有显式调用 recipe API
 才写入 `prompt_recipes`。

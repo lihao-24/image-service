@@ -549,15 +549,3 @@ function invalidParam(field: string, message: string): ImageGenerationParamsVali
     message
   };
 }
-
-function invalidSizeResolutionParam(
-  field: string,
-  message: string
-): ImageGenerationParamsValidationResult {
-  return {
-    ok: false,
-    code: "invalid_generation_size_resolution",
-    field,
-    message
-  };
-}

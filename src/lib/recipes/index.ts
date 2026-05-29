@@ -45,6 +45,7 @@ export type RecipePatchValidationResult =
   | { ok: false; code: typeof INVALID_RECIPE_PARAMS; field: string; message: string };
 
 const ALLOWED_MODES = ["text-to-image", "image-edit"] as const;
+type RecipeMode = (typeof ALLOWED_MODES)[number];
 const FORBIDDEN_CLIENT_KEYS = [
   "providerConfig",
   "provider_config",
@@ -274,7 +275,7 @@ function hasAnyGenerationParam(input: Record<string, unknown>) {
   ].some((key) => key in input);
 }
 
-function isAllowedMode(value: string | null | undefined): value is PromptRecipeInput["mode"] {
+function isAllowedMode(value: string | null | undefined): value is RecipeMode {
   return ALLOWED_MODES.includes(value as (typeof ALLOWED_MODES)[number]);
 }
 

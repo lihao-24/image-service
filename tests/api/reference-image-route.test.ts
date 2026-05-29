@@ -185,7 +185,9 @@ describe("POST /api/images/edits", () => {
 
   it("最小参考图请求只把 model、prompt 和 image 传给 adapter", async () => {
     mockUser();
-    const editImage = vi.fn(async () => ({
+    const editImage = vi.fn<
+      (provider: ProviderConfig, request: EditImageRequest) => Promise<ProviderImageResult>
+    >(async () => ({
       b64Json: "edited-base64-image",
       raw: { data: [{ b64_json: "edited-base64-image" }] }
     }));
