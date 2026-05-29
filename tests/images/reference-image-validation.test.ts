@@ -3,6 +3,7 @@ import {
   INVALID_REFERENCE_IMAGE,
   REFERENCE_IMAGE_ALLOWED_MIME_TYPES,
   REFERENCE_IMAGE_MAX_BYTES,
+  validateTextToImageRequestBody,
   validateReferenceImageFormData
 } from "@/lib/images";
 
@@ -30,6 +31,26 @@ function createForm(file?: File | null) {
 }
 
 describe("validateReferenceImageFormData", () => {
+  it("文生图请求只要求 provider、model 和 prompt", () => {
+    expect(
+      validateTextToImageRequestBody({
+        provider: "fastcode",
+        model: "gpt-image-2-2k",
+        prompt: "生成白底商品主图"
+      })
+    ).toMatchObject({ ok: true });
+  });
+
+  it("参考图请求不要求旧图片参数", () => {
+    const formData = new FormData();
+    formData.set("provider", "fastcode");
+    formData.set("model", "gpt-image-2-2k");
+    formData.set("prompt", "把参考图改成白底商品主图");
+    formData.set("image", new File(["abc"], "reference.png", { type: "image/png" }));
+
+    expect(validateReferenceImageFormData(formData)).toMatchObject({ ok: true });
+  });
+
   it("接受常见图片 MIME 并保留内存中的 File", () => {
     for (const mimeType of REFERENCE_IMAGE_ALLOWED_MIME_TYPES) {
       const file = new File(["bytes"], `reference.${mimeType.split("/")[1]}`, {

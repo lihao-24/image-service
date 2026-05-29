@@ -7,12 +7,6 @@ export type TemplateSourceView = "builtin" | "mine" | "favorites" | "category";
 export type GenerationParamsSnapshot = {
   provider: string;
   model: string;
-  size: string;
-  resolution?: string;
-  quality: string;
-  outputFormat: string;
-  background?: string;
-  moderation?: string;
 };
 
 export type TemporaryImage = {

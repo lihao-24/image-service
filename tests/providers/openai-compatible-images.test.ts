@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  createGeminiGenerateContentAdapter,
   createOpenAICompatibleImagesAdapter,
   type ProviderConfig
 } from "@/lib/providers";
@@ -11,11 +12,20 @@ const provider: ProviderConfig = {
   baseUrl: "https://provider.example.test/v1",
   apiKeyEnv: "SUB2API_API_KEY",
   apiKey: "test-key",
-  models: ["gpt-image-2"]
+  models: [
+    {
+      id: "gpt-image-2",
+      label: "GPT Image 2",
+      family: "chatgpt",
+      enabled: true,
+      supportsTextToImage: true,
+      supportsImageToImage: true
+    }
+  ]
 };
 
 describe("createOpenAICompatibleImagesAdapter", () => {
-  it("文生图请求使用 /images/generations 且可注入 fetch", async () => {
+  it("OpenAI-compatible 文生图只发送 model 和 prompt", async () => {
     const fetchMock = vi.fn(async () => new Response(
       JSON.stringify({ data: [{ b64_json: "generated-image" }] }),
       { status: 200, headers: { "content-type": "application/json" } }
@@ -24,10 +34,7 @@ describe("createOpenAICompatibleImagesAdapter", () => {
 
     const result = await adapter.generateImage(provider, {
       model: "gpt-image-2",
-      prompt: "一只玻璃茶杯",
-      size: "1024x1536",
-      quality: "high",
-      outputFormat: "png"
+      prompt: "一只玻璃茶杯"
     });
 
     expect(result.b64Json).toBe("generated-image");
@@ -38,39 +45,50 @@ describe("createOpenAICompatibleImagesAdapter", () => {
     );
     expect(JSON.parse(String((calls[0]?.[1] as RequestInit).body))).toEqual({
       model: "gpt-image-2",
-      prompt: "一只玻璃茶杯",
-      size: "1024x1536",
-      quality: "high",
-      output_format: "png"
+      prompt: "一只玻璃茶杯"
     });
   });
 
-  it("文生图请求传递 gpt-image-2 官方可选参数", async () => {
+  it("Gemini generateContent 响应可归一化为 b64Json", async () => {
     const fetchMock = vi.fn(async () => new Response(
-      JSON.stringify({ data: [{ b64_json: "generated-image" }] }),
+      JSON.stringify({
+        candidates: [
+          {
+            content: {
+              parts: [
+                {
+                  inlineData: {
+                    mimeType: "image/png",
+                    data: "abc"
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }),
       { status: 200, headers: { "content-type": "application/json" } }
     ));
-    const adapter = createOpenAICompatibleImagesAdapter({ fetch: fetchMock });
+    const adapter = createGeminiGenerateContentAdapter({ fetch: fetchMock });
 
-    await adapter.generateImage(provider, {
-      model: "gpt-image-2",
-      prompt: "一张产品图",
-      size: "1024x1536",
-      quality: "auto",
-      outputFormat: "webp",
-      background: "opaque",
-      moderation: "auto"
-    });
+    await expect(
+      adapter.generateImage(
+        { ...provider, type: "gemini-generate-content", authStyle: "api-key-header" },
+        { model: "gemini-3.1-flash-image-preview", prompt: "生成白底商品主图" }
+      )
+    ).resolves.toMatchObject({ b64Json: "abc", mimeType: "image/png" });
 
     const calls = fetchMock.mock.calls as unknown[][];
     expect(JSON.parse(String((calls[0]?.[1] as RequestInit).body))).toEqual({
-      model: "gpt-image-2",
-      prompt: "一张产品图",
-      size: "1024x1536",
-      quality: "auto",
-      output_format: "webp",
-      background: "opaque",
-      moderation: "auto"
+      contents: [
+        {
+          parts: [
+            {
+              text: "生成白底商品主图"
+            }
+          ]
+        }
+      ]
     });
   });
 
@@ -88,10 +106,7 @@ describe("createOpenAICompatibleImagesAdapter", () => {
       model: "gpt-image-2",
       prompt: "换成暖色背景",
       image: referenceImage,
-      imageFilename: "reference.png",
-      size: "1024x1536",
-      quality: "high",
-      outputFormat: "png"
+      imageFilename: "reference.png"
     });
 
     expect(result.b64Json).toBe("edited-image");
@@ -113,10 +128,7 @@ describe("createOpenAICompatibleImagesAdapter", () => {
       model: "gpt-image-2",
       prompt: "保持主体，改成午后光线",
       image: new Blob(["fake-image"], { type: "image/png" }),
-      imageFilename: "reference.png",
-      size: "1024x1536",
-      quality: "high",
-      outputFormat: "png"
+      imageFilename: "reference.png"
     });
 
     expect(result.b64Json).toBe("fallback-edited-image");
@@ -137,10 +149,7 @@ describe("createOpenAICompatibleImagesAdapter", () => {
     await expect(
       adapter.generateImage(provider, {
         model: "gpt-image-2",
-        prompt: "违规内容",
-        size: "1024x1024",
-        quality: "auto",
-        outputFormat: "png"
+        prompt: "违规内容"
       })
     ).rejects.toThrow("provider_content_policy_violation");
   });
@@ -155,10 +164,7 @@ describe("createOpenAICompatibleImagesAdapter", () => {
     await expect(
       authAdapter.generateImage(provider, {
         model: "gpt-image-2",
-        prompt: "测试",
-        size: "1024x1024",
-        quality: "auto",
-        outputFormat: "png"
+        prompt: "测试"
       })
     ).rejects.toThrow("provider_auth_failed");
 
@@ -173,10 +179,7 @@ describe("createOpenAICompatibleImagesAdapter", () => {
     await expect(
       rateLimitAdapter.generateImage(provider, {
         model: "gpt-image-2",
-        prompt: "测试",
-        size: "1024x1024",
-        quality: "auto",
-        outputFormat: "png"
+        prompt: "测试"
       })
     ).rejects.toThrow("provider_rate_limited");
   });
@@ -199,10 +202,7 @@ describe("createOpenAICompatibleImagesAdapter", () => {
     await expect(
       adapter.generateImage(provider, {
         model: "gpt-image-2",
-        prompt: "敏感 prompt 不应进入日志",
-        size: "auto",
-        quality: "auto",
-        outputFormat: "png"
+        prompt: "敏感 prompt 不应进入日志"
       })
     ).rejects.toThrow("provider_response_invalid");
 
@@ -251,10 +251,7 @@ describe("createOpenAICompatibleImagesAdapter", () => {
     await expect(
       adapter.generateImage(provider, {
         model: "gpt-image-2",
-        prompt: "敏感 prompt 不应进入日志",
-        size: "auto",
-        quality: "auto",
-        outputFormat: "png"
+        prompt: "敏感 prompt 不应进入日志"
       })
     ).rejects.toThrow("provider_response_invalid");
 
@@ -296,10 +293,7 @@ describe("createOpenAICompatibleImagesAdapter", () => {
     await expect(
       adapter.generateImage(provider, {
         model: "gpt-image-2",
-        prompt: "敏感 prompt 不应进入日志",
-        size: "auto",
-        quality: "auto",
-        outputFormat: "png"
+        prompt: "敏感 prompt 不应进入日志"
       })
     ).rejects.toThrow("provider_rate_limited");
 

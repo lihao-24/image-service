@@ -18,7 +18,7 @@ vi.mock("@/lib/providers", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/providers")>();
   return {
     ...actual,
-    createOpenAICompatibleImagesAdapter: vi.fn()
+    createImagesAdapterForProvider: vi.fn()
   };
 });
 
@@ -33,7 +33,7 @@ vi.mock("@/lib/usage", async (importOriginal) => {
 const { createServerSupabaseClient } = await import("@/lib/auth/server");
 const { openDatabase } = await import("@/lib/db");
 const { getDailyUsage, listGenerationLogs } = await import("@/lib/db");
-const { createOpenAICompatibleImagesAdapter } = await import("@/lib/providers");
+const { createImagesAdapterForProvider } = await import("@/lib/providers");
 const { checkDailyQuota, getUsageDate } = await import("@/lib/usage");
 const { POST } = await import("@/app/api/images/edits/route");
 const actualDb = await vi.importActual<typeof import("@/lib/db")>("@/lib/db");
@@ -41,12 +41,12 @@ const actualUsage = await vi.importActual<typeof import("@/lib/usage")>("@/lib/u
 
 const mockCreateServerSupabaseClient = createServerSupabaseClient as Mock;
 const mockOpenDatabase = openDatabase as Mock;
-const mockCreateAdapter = createOpenAICompatibleImagesAdapter as Mock;
+const mockCreateAdapter = createImagesAdapterForProvider as Mock;
 const mockCheckDailyQuota = checkDailyQuota as Mock;
 let currentDb: import("@/lib/db").ImageDatabase;
 
 const validFields = {
-  provider: "sub2api",
+  provider: "toioto",
   model: "gpt-image-2",
   prompt: "把参考图改成柔和自然光产品照",
   size: "2:3",
@@ -171,7 +171,7 @@ describe("POST /api/images/edits", () => {
       createMultipartRequest({
         fields: {
           ...validFields,
-          quality: "ultra"
+          provider: "missing"
         }
       })
     );
@@ -181,6 +181,42 @@ describe("POST /api/images/edits", () => {
     expect(body.error).toBe("invalid_generation_params");
     expect(mockCreateAdapter).not.toHaveBeenCalled();
     expect(mockOpenDatabase).not.toHaveBeenCalled();
+  });
+
+  it("最小参考图请求只把 model、prompt 和 image 传给 adapter", async () => {
+    mockUser();
+    const editImage = vi.fn(async () => ({
+      b64Json: "edited-base64-image",
+      raw: { data: [{ b64_json: "edited-base64-image" }] }
+    }));
+    mockCreateAdapter.mockReturnValue({ editImage });
+
+    const response = await POST(
+      createMultipartRequest({
+        fields: {
+          provider: "toioto",
+          model: "gpt-image-2",
+          prompt: "把参考图改成白底商品主图"
+        }
+      })
+    );
+
+    expect(response.status).toBe(200);
+    expect(editImage).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        model: "gpt-image-2",
+        prompt: "把参考图改成白底商品主图",
+        image: expect.any(File),
+        imageFilename: "reference.png"
+      })
+    );
+    const request = editImage.mock.calls[0]?.[1];
+    expect(request).not.toHaveProperty("size");
+    expect(request).not.toHaveProperty("quality");
+    expect(request).not.toHaveProperty("outputFormat");
+    expect(request).not.toHaveProperty("background");
+    expect(request).not.toHaveProperty("moderation");
   });
 
   it("gpt-image-2 参考图生图不受每日额度拦截，但成功后仍统计用量", async () => {
@@ -242,18 +278,13 @@ describe("POST /api/images/edits", () => {
     expect(editImage).toHaveBeenCalledTimes(1);
     expect(editImage).toHaveBeenCalledWith(
       expect.objectContaining({
-        id: "sub2api",
+        id: "toioto",
         baseUrl: "https://sub2api.toioto.org/v1",
         apiKey: "test-key"
       }),
       expect.objectContaining({
         model: "gpt-image-2",
         prompt: validFields.prompt,
-        size: "1024x1536",
-        quality: "high",
-        outputFormat: "png",
-        background: "auto",
-        moderation: "auto",
         image: expect.any(File),
         imageFilename: "reference.png"
       })
@@ -268,15 +299,15 @@ describe("POST /api/images/edits", () => {
     expect(body).toEqual({
       image: {
         b64_json: "edited-base64-image",
-        output_format: "png"
+        output_format: "auto"
       },
       meta: {
-        provider: "sub2api",
+        provider: "toioto",
         model: "gpt-image-2",
-        size: "2:3",
-        resolution: "standard",
-        quality: "high",
-        output_format: "png",
+        size: "auto",
+        resolution: "auto",
+        quality: "auto",
+        output_format: "auto",
         background: "auto",
         moderation: "auto",
         mode: "image-edit",
@@ -318,7 +349,7 @@ describe("POST /api/images/edits", () => {
 
     expect(response.status).toBe(502);
     expect(body.error).toBe("provider_request_failed");
-    expect(body.message).not.toContain("sub2api");
+    expect(body.message).not.toContain("toioto");
     expect(body.message).not.toContain("test-key");
     expect(body.message).not.toContain("Error:");
     expect(getDailyUsage(currentDb, "user-w08", getUsageDate())).toBe(0);
@@ -335,23 +366,26 @@ describe("POST /api/images/edits", () => {
     expect(JSON.stringify(logs)).not.toContain("Error:");
     expect(mockCreateAdapter).toHaveBeenCalledWith(
       expect.objectContaining({
+        id: "toioto"
+      }),
+      expect.objectContaining({
         logger: console,
         requestId: expect.stringMatching(/^img_/)
       })
     );
-    const requestId = mockCreateAdapter.mock.calls[0]?.[0]?.requestId;
+    const requestId = mockCreateAdapter.mock.calls[0]?.[1]?.requestId;
     expect(warnMock).toHaveBeenCalledWith(
       "[image-service] image request failed",
       expect.objectContaining({
         requestId,
-        providerId: "sub2api",
+        providerId: "toioto",
         model: "gpt-image-2",
         mode: "image-edit",
-        size: "2:3",
-        resolution: "standard",
-        providerSize: "1024x1536",
-        quality: "high",
-        outputFormat: "png",
+        size: "auto",
+        resolution: "auto",
+        providerSize: "auto",
+        quality: "auto",
+        outputFormat: "auto",
         background: "auto",
         moderation: "auto",
         hasReferenceImage: true,

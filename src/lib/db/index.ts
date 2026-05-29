@@ -14,10 +14,10 @@ export interface PromptRecipeInput {
   mode: GenerationMode;
   provider: string;
   model: string;
-  size: string;
-  quality: string;
-  outputFormat: string;
-  params: Record<string, unknown>;
+  size?: string;
+  quality?: string;
+  outputFormat?: string;
+  params?: Record<string, unknown>;
   referenceMode: string | null;
   isFavorite: boolean;
 }
@@ -182,10 +182,10 @@ export function createPromptRecipe(
     input.mode,
     input.provider,
     input.model,
-    input.size,
-    input.quality,
-    input.outputFormat,
-    JSON.stringify(input.params),
+    input.size ?? "auto",
+    input.quality ?? "auto",
+    input.outputFormat ?? "auto",
+    JSON.stringify(input.params ?? {}),
     input.referenceMode,
     input.isFavorite ? 1 : 0
   );

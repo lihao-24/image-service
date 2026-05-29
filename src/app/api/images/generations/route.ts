@@ -2,7 +2,6 @@ import { NextResponse, type NextRequest } from "next/server";
 import { AUTH_REQUIRED, getSessionUser } from "@/lib/auth";
 import { createServerSupabaseClient } from "@/lib/auth/server";
 import {
-  mapImageSizeForProvider,
   parseImageServiceConfig,
   validateImageGenerationParams
 } from "@/lib/config";
@@ -18,7 +17,7 @@ import {
   INVALID_GENERATION_PARAMS,
   validateTextToImageRequestBody
 } from "@/lib/images";
-import { createOpenAICompatibleImagesAdapter } from "@/lib/providers";
+import { createImagesAdapterForProvider } from "@/lib/providers";
 import {
   checkDailyQuota,
   getDailyLimit,
@@ -51,7 +50,9 @@ export async function POST(request: NextRequest | Request) {
   }
 
   const config = parseImageServiceConfig();
-  const paramsResult = validateImageGenerationParams(bodyResult.body, config);
+  const paramsResult = validateImageGenerationParams(bodyResult.body, config, {
+    mode: TEXT_TO_IMAGE_MODE
+  });
   if (!paramsResult.ok) {
     return invalidGenerationParamsResponse(paramsResult.message);
   }
@@ -93,16 +94,14 @@ export async function POST(request: NextRequest | Request) {
       );
     }
 
-    const adapter = createOpenAICompatibleImagesAdapter({ logger: console, requestId });
+    const adapter = createImagesAdapterForProvider(paramsResult.provider, {
+      logger: console,
+      requestId
+    });
     let result: Awaited<ReturnType<typeof adapter.generateImage>>;
     let logContext: ImageRequestLogContext | null = null;
 
     try {
-      const providerSize = mapImageSizeForProvider(
-        paramsResult.params.model,
-        paramsResult.params.size,
-        paramsResult.params.resolution
-      );
       logContext = {
         requestId,
         providerId: paramsResult.params.provider,
@@ -110,7 +109,7 @@ export async function POST(request: NextRequest | Request) {
         mode: TEXT_TO_IMAGE_MODE,
         size: paramsResult.params.size,
         resolution: paramsResult.params.resolution,
-        providerSize,
+        providerSize: "auto",
         quality: paramsResult.params.quality,
         outputFormat: paramsResult.params.outputFormat,
         background: paramsResult.params.background,
@@ -121,12 +120,7 @@ export async function POST(request: NextRequest | Request) {
       logImageRequestStarted(console, logContext);
       result = await adapter.generateImage(paramsResult.provider, {
         model: paramsResult.params.model,
-        prompt: bodyResult.body.prompt,
-        size: providerSize,
-        quality: paramsResult.params.quality,
-        outputFormat: paramsResult.params.outputFormat,
-        background: paramsResult.params.background,
-        moderation: paramsResult.params.moderation
+        prompt: bodyResult.body.prompt
       });
     } catch (error) {
       const errorCode = normalizeProviderErrorCode(error);
@@ -206,11 +200,16 @@ export async function POST(request: NextRequest | Request) {
     });
 
     return NextResponse.json(
-      createTemporaryImageResponse(result.b64Json, paramsResult.params, {
-        generationCount,
-        limit: quotaLimited ? dailyLimit : null,
-        limited: quotaLimited
-      })
+      createTemporaryImageResponse(
+        result.b64Json,
+        paramsResult.params,
+        {
+          generationCount,
+          limit: quotaLimited ? dailyLimit : null,
+          limited: quotaLimited
+        },
+        { outputFormat: result.outputFormat ?? "auto" }
+      )
     );
   } finally {
     closeDatabase(db);

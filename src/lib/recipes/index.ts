@@ -90,17 +90,10 @@ export function validateRecipeRequestBody(body: unknown): RecipeValidationResult
   const paramResult = validateImageGenerationParams(
     {
       provider: readRequiredString(objectResult.value.provider) ?? "",
-      model: readRequiredString(objectResult.value.model) ?? "",
-      size: readRequiredString(objectResult.value.size) ?? "",
-      resolution: readOptionalString(objectResult.value.resolution) ?? undefined,
-      quality: readRequiredString(objectResult.value.quality) ?? "",
-      output_format: readRequiredString(
-        objectResult.value.output_format ?? objectResult.value.outputFormat
-      ) ?? "",
-      background: readOptionalString(objectResult.value.background) ?? undefined,
-      moderation: readOptionalString(objectResult.value.moderation) ?? undefined
+      model: readRequiredString(objectResult.value.model) ?? ""
     },
-    parseImageServiceConfig()
+    parseImageServiceConfig(),
+    { mode }
   );
 
   if (!paramResult.ok) {
@@ -116,15 +109,7 @@ export function validateRecipeRequestBody(body: unknown): RecipeValidationResult
       mode,
       provider: paramResult.params.provider,
       model: paramResult.params.model,
-      size: paramResult.params.size,
-      quality: paramResult.params.quality,
-      outputFormat: paramResult.params.outputFormat,
-      params: {
-        ...readParams(objectResult.value.params),
-        resolution: paramResult.params.resolution,
-        background: paramResult.params.background,
-        moderation: paramResult.params.moderation
-      },
+      params: readParams(objectResult.value.params),
       referenceMode: readNullableString(objectResult.value.reference_mode),
       isFavorite: readBoolean(objectResult.value.is_favorite)
     }
@@ -179,31 +164,17 @@ export function validateRecipePatchBody(body: unknown): RecipePatchValidationRes
   if (hasAnyGenerationParam(objectResult.value)) {
     const currentParams = {
       provider: readRequiredString(objectResult.value.provider) ?? "",
-      model: readRequiredString(objectResult.value.model) ?? "",
-      size: readRequiredString(objectResult.value.size) ?? "",
-      resolution: readOptionalString(objectResult.value.resolution) ?? undefined,
-      quality: readRequiredString(objectResult.value.quality) ?? "",
-      output_format: readRequiredString(
-        objectResult.value.output_format ?? objectResult.value.outputFormat
-      ) ?? "",
-      background: readOptionalString(objectResult.value.background) ?? undefined,
-      moderation: readOptionalString(objectResult.value.moderation) ?? undefined
+      model: readRequiredString(objectResult.value.model) ?? ""
     };
-    const paramResult = validateImageGenerationParams(currentParams, parseImageServiceConfig());
+    const paramResult = validateImageGenerationParams(currentParams, parseImageServiceConfig(), {
+      mode: mode ?? "text-to-image"
+    });
     if (!paramResult.ok) {
       return invalidRecipeParams(paramResult.field, paramResult.message);
     }
     input.provider = paramResult.params.provider;
     input.model = paramResult.params.model;
-    input.size = paramResult.params.size;
-    input.quality = paramResult.params.quality;
-    input.outputFormat = paramResult.params.outputFormat;
-    input.params = {
-      ...(input.params ?? readParams(objectResult.value.params)),
-      resolution: paramResult.params.resolution,
-      background: paramResult.params.background,
-      moderation: paramResult.params.moderation
-    };
+    input.params = input.params ?? readParams(objectResult.value.params);
   }
 
   if ("params" in objectResult.value && !input.params) {
@@ -299,14 +270,7 @@ function findForbiddenKey(input: Record<string, unknown>): string | null {
 function hasAnyGenerationParam(input: Record<string, unknown>) {
   return [
     "provider",
-    "model",
-    "size",
-    "resolution",
-    "quality",
-    "output_format",
-    "outputFormat",
-    "background",
-    "moderation"
+    "model"
   ].some((key) => key in input);
 }
 

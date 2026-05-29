@@ -196,25 +196,13 @@ export function readTemplateParams(
   if (template.source === "builtin") {
     return {
       provider: fallback.provider,
-      model: template.recommended.model,
-      size: template.recommended.size,
-      resolution: fallback.resolution,
-      quality: template.recommended.quality,
-      outputFormat: template.recommended.output_format,
-      background: fallback.background,
-      moderation: fallback.moderation
+      model: template.recommended.model || fallback.model
     };
   }
 
   return {
     provider: template.provider || fallback.provider,
-    model: template.model,
-    size: template.size,
-    resolution: template.resolution ?? fallback.resolution,
-    quality: template.quality,
-    outputFormat: template.output_format,
-    background: template.background ?? fallback.background,
-    moderation: template.moderation ?? fallback.moderation
+    model: template.model || fallback.model
   };
 }
 

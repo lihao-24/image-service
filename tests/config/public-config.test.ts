@@ -7,35 +7,67 @@ import {
 } from "@/lib/config";
 
 describe("getPublicImageConfig", () => {
-  it("gpt-image-2 默认公开配置包含官方主流参数选项且不泄露密钥", () => {
+  it("公开配置暴露二级 provider model 配置且不暴露密钥字段", () => {
     const config = getPublicImageConfig({
-      SUB2API_API_KEY: "test-key"
+      SUB2API_API_KEY: "test-key",
+      FASTCODE_API_KEY: "fastcode-key",
+      IMAGE_DEFAULT_PROVIDER: "toioto",
+      IMAGE_DEFAULT_MODEL: "gpt-image-2",
+      IMAGE_PROVIDER_OPTIONS: JSON.stringify([
+        {
+          id: "toioto",
+          label: "Toioto",
+          type: "openai-compatible-images",
+          baseUrl: "https://sub2api.toioto.org/v1",
+          apiKeyEnv: "SUB2API_API_KEY",
+          models: [
+            {
+              id: "gpt-image-2",
+              label: "GPT Image 2",
+              family: "chatgpt",
+              enabled: true,
+              supportsTextToImage: true,
+              supportsImageToImage: true
+            }
+          ]
+        },
+        {
+          id: "fastcode",
+          label: "FastCode",
+          type: "openai-compatible-images",
+          baseUrl: "https://timebackward.com",
+          apiKeyEnv: "FASTCODE_API_KEY",
+          models: [
+            {
+              id: "gemini-3.1-flash-image-preview",
+              label: "Gemini 3.1 Flash Image Preview",
+              family: "gemini",
+              enabled: true,
+              supportsTextToImage: true,
+              supportsImageToImage: true
+            }
+          ]
+        }
+      ])
     });
 
-    expect(config.defaultProvider).toBe("sub2api");
-    expect(config.defaults).toEqual({
-      model: "gpt-image-2",
-      size: "auto",
-      resolution: "auto",
-      quality: "auto",
-      outputFormat: "png",
-      background: "auto",
-      moderation: "auto"
+    expect(config.defaultProviderId).toBe("toioto");
+    expect(config.defaultModelId).toBe("gpt-image-2");
+    expect(config.providers[0]).toMatchObject({
+      id: "toioto",
+      label: "Toioto",
+      models: [
+        {
+          id: "gpt-image-2",
+          label: "GPT Image 2",
+          family: "chatgpt",
+          supportsTextToImage: true,
+          supportsImageToImage: true
+        }
+      ]
     });
-    expect(config.options.sizes).toEqual(["auto", "1:1", "3:2", "2:3", "16:9", "9:16"]);
-    expect(config.options.resolutions).toEqual(["auto", "standard", "hd", "4k"]);
-    expect(config.options.qualities).toEqual(["auto", "high", "medium", "low"]);
-    expect(config.options.outputFormats).toEqual(expect.arrayContaining(["png", "jpeg", "webp"]));
-    expect(config.options.backgrounds).toEqual(["auto", "opaque"]);
-    expect(config.options.moderations).toEqual(["auto", "low"]);
-    expect(config.providers).toEqual([
-      {
-        id: "sub2api",
-        label: "Sub2API",
-        models: ["gpt-image-2"]
-      }
-    ]);
     expect(JSON.stringify(config)).not.toContain("test-key");
+    expect(JSON.stringify(config)).not.toContain("fastcode-key");
     expect(JSON.stringify(config)).not.toContain("apiKey");
     expect(JSON.stringify(config)).not.toContain("apiKeyEnv");
     expect(JSON.stringify(config)).not.toContain("baseUrl");
@@ -43,6 +75,25 @@ describe("getPublicImageConfig", () => {
 });
 
 describe("parseImageServiceConfig", () => {
+  it("兼容旧 models 字符串数组配置", () => {
+    const config = parseImageServiceConfig({
+      SUB2API_API_KEY: "test-key",
+      IMAGE_PROVIDER_OPTIONS:
+        '[{"id":"toioto","label":"Toioto","type":"openai-compatible-images","baseUrl":"https://sub2api.toioto.org/v1","apiKeyEnv":"SUB2API_API_KEY","models":["gpt-image-2"]}]',
+      IMAGE_DEFAULT_PROVIDER: "toioto",
+      IMAGE_DEFAULT_MODEL: "gpt-image-2"
+    });
+
+    expect(config.providers[0].models[0]).toMatchObject({
+      id: "gpt-image-2",
+      label: "gpt-image-2",
+      family: "chatgpt",
+      enabled: true,
+      supportsTextToImage: true,
+      supportsImageToImage: true
+    });
+  });
+
   it("从环境变量解析服务端 provider 配置，并要求默认值都存在于 allowlist", () => {
     const config = parseImageServiceConfig({
       IMAGE_DEFAULT_PROVIDER: "sub2api",
@@ -96,6 +147,7 @@ describe("parseImageServiceConfig", () => {
   it("拒绝默认参数不在 allowlist 中的配置", () => {
     expect(() =>
       parseImageServiceConfig({
+        IMAGE_DEFAULT_PROVIDER: "sub2api",
         IMAGE_PROVIDER_OPTIONS:
           '[{"id":"sub2api","label":"Sub2API","type":"openai-compatible-images","baseUrl":"https://example.test/v1","apiKeyEnv":"SUB2API_API_KEY","models":["gpt-image-2"]}]',
         SUB2API_API_KEY: "test-key",
@@ -107,6 +159,8 @@ describe("parseImageServiceConfig", () => {
 
 describe("validateImageGenerationParams", () => {
   const config = parseImageServiceConfig({
+    IMAGE_DEFAULT_PROVIDER: "sub2api",
+    IMAGE_DEFAULT_MODEL: "gpt-image-2",
     IMAGE_PROVIDER_OPTIONS:
       '[{"id":"sub2api","label":"Sub2API","type":"openai-compatible-images","baseUrl":"https://example.test/v1","apiKeyEnv":"SUB2API_API_KEY","models":["gpt-image-2"]}]',
     SUB2API_API_KEY: "test-key"
@@ -132,12 +186,12 @@ describe("validateImageGenerationParams", () => {
       expect(result.params).toEqual({
         provider: "sub2api",
         model: "gpt-image-2",
-        size: "3:2",
-        resolution: "hd",
-        quality: "high",
-        outputFormat: "png",
-        background: "opaque",
-        moderation: "low"
+        size: "auto",
+        resolution: "auto",
+        quality: "auto",
+        outputFormat: "auto",
+        background: "auto",
+        moderation: "auto"
       });
     }
   });
@@ -186,13 +240,7 @@ describe("validateImageGenerationParams", () => {
 
   it.each([
     ["provider", { provider: "evil" }],
-    ["model", { model: "gpt-image-1" }],
-    ["size", { size: "2048x2048" }],
-    ["resolution", { resolution: "ultra" }],
-    ["quality", { quality: "ultra" }],
-    ["output_format", { output_format: "gif" }],
-    ["background", { background: "transparent" }],
-    ["moderation", { moderation: "strict" }]
+    ["model", { model: "gpt-image-1" }]
   ])("拒绝非法 %s", (_field, override) => {
     const result = validateImageGenerationParams(
       {
@@ -213,24 +261,46 @@ describe("validateImageGenerationParams", () => {
     }
   });
 
-  it("拒绝 gpt-image-2 不支持的比例和分辨率组合", () => {
-    const result = validateImageGenerationParams(
-      {
-        provider: "sub2api",
-        model: "gpt-image-2",
-        size: "1:1",
-        resolution: "4k",
-        quality: "auto",
-        output_format: "png"
-      },
-      config
-    );
+  it("按 route mode 校验模型能力", () => {
+    const modeConfig = parseImageServiceConfig({
+      FASTCODE_API_KEY: "fastcode-key",
+      IMAGE_DEFAULT_PROVIDER: "fastcode",
+      IMAGE_DEFAULT_MODEL: "text-only-image-model",
+      IMAGE_PROVIDER_OPTIONS: JSON.stringify([
+        {
+          id: "fastcode",
+          label: "FastCode",
+          type: "openai-compatible-images",
+          baseUrl: "https://timebackward.com",
+          apiKeyEnv: "FASTCODE_API_KEY",
+          models: [
+            {
+              id: "text-only-image-model",
+              label: "Text Only",
+              family: "chatgpt",
+              enabled: true,
+              supportsTextToImage: true,
+              supportsImageToImage: false
+            }
+          ]
+        }
+      ])
+    });
 
-    expect(result.ok).toBe(false);
-    if (!result.ok) {
-      expect(result.code).toBe("invalid_generation_size_resolution");
-      expect(result.field).toBe("resolution");
-    }
+    expect(
+      validateImageGenerationParams(
+        { provider: "fastcode", model: "text-only-image-model" },
+        modeConfig,
+        { mode: "text-to-image" }
+      ).ok
+    ).toBe(true);
+    expect(
+      validateImageGenerationParams(
+        { provider: "fastcode", model: "text-only-image-model" },
+        modeConfig,
+        { mode: "image-edit" }
+      )
+    ).toMatchObject({ ok: false, field: "model" });
   });
 });
 

@@ -1,10 +1,26 @@
 export type PublicProviderConfig = {
   id: string;
   label: string;
-  models: string[];
+  models: PublicProviderModelConfig[];
 };
 
-export type ProviderType = "openai-compatible-images";
+export type ImageModelFamily = "chatgpt" | "gemini";
+
+export type ProviderType = "openai-compatible-images" | "gemini-generate-content";
+
+export type ImageProviderAuthStyle = "bearer" | "api-key-header" | "query-key";
+
+export type ProviderModelConfig = {
+  id: string;
+  label: string;
+  family: ImageModelFamily;
+  enabled: boolean;
+  supportsTextToImage: boolean;
+  supportsImageToImage: boolean;
+  note?: string;
+};
+
+export type PublicProviderModelConfig = Omit<ProviderModelConfig, "enabled" | "note">;
 
 export type ProviderConfig = {
   id: string;
@@ -13,10 +29,13 @@ export type ProviderConfig = {
   baseUrl: string;
   apiKeyEnv: string;
   apiKey: string;
-  models: string[];
+  authStyle?: ImageProviderAuthStyle;
+  models: ProviderModelConfig[];
 };
 
 export type PublicImageConfig = {
+  defaultProviderId: string;
+  defaultModelId: string;
   defaultProvider: string;
   defaults: {
     model: string;
@@ -39,6 +58,8 @@ export type PublicImageConfig = {
 };
 
 export type ImageServiceConfig = {
+  defaultProviderId: string;
+  defaultModelId: string;
   defaultProvider: string;
   defaults: {
     model: string;
@@ -61,11 +82,11 @@ export type ImageServiceConfig = {
 };
 
 export type ImageGenerationParams = {
-  provider: string;
-  model: string;
-  size: string;
+  provider?: string;
+  model?: string;
+  size?: string;
   resolution?: string;
-  quality: string;
+  quality?: string;
   output_format?: string;
   outputFormat?: string;
   background?: string;
@@ -92,12 +113,17 @@ export type ImageGenerationParamsValidationResult =
       field: string;
     };
 
+type ImageGenerationValidationOptions = {
+  mode?: "text-to-image" | "image-edit";
+};
+
 type ProviderOptionInput = {
   id?: unknown;
   label?: unknown;
   type?: unknown;
   baseUrl?: unknown;
   apiKeyEnv?: unknown;
+  authStyle?: unknown;
   models?: unknown;
 };
 
@@ -105,16 +131,25 @@ type ImageConfigEnv = Record<string, string | undefined>;
 
 const DEFAULT_PROVIDER_OPTIONS = JSON.stringify([
   {
-    id: "sub2api",
-    label: "Sub2API",
+    id: "toioto",
+    label: "Toioto",
     type: "openai-compatible-images",
     baseUrl: "https://sub2api.toioto.org/v1",
     apiKeyEnv: "SUB2API_API_KEY",
-    models: ["gpt-image-2"]
+    models: [
+      {
+        id: "gpt-image-2",
+        label: "GPT Image 2",
+        family: "chatgpt",
+        enabled: true,
+        supportsTextToImage: true,
+        supportsImageToImage: true
+      }
+    ]
   }
 ]);
 
-const DEFAULT_PROVIDER = "sub2api";
+const DEFAULT_PROVIDER = "toioto";
 const DEFAULT_MODEL = "gpt-image-2";
 const DEFAULT_SIZE = "auto";
 const DEFAULT_RESOLUTION = "auto";
@@ -158,6 +193,8 @@ export function parseImageServiceConfig(env: ImageConfigEnv = process.env): Imag
     )
   };
   const config: ImageServiceConfig = {
+    defaultProviderId: env.IMAGE_DEFAULT_PROVIDER?.trim() || DEFAULT_PROVIDER,
+    defaultModelId: env.IMAGE_DEFAULT_MODEL?.trim() || DEFAULT_MODEL,
     defaultProvider: env.IMAGE_DEFAULT_PROVIDER?.trim() || DEFAULT_PROVIDER,
     defaults: {
       model: env.IMAGE_DEFAULT_MODEL?.trim() || DEFAULT_MODEL,
@@ -179,12 +216,22 @@ export function parseImageServiceConfig(env: ImageConfigEnv = process.env): Imag
 
 export function toPublicImageConfig(config: ImageServiceConfig): PublicImageConfig {
   return {
+    defaultProviderId: config.defaultProviderId,
+    defaultModelId: config.defaultModelId,
     defaultProvider: config.defaultProvider,
     defaults: config.defaults,
     providers: config.providers.map((provider) => ({
       id: provider.id,
       label: provider.label,
       models: provider.models
+        .filter((model) => model.enabled)
+        .map(({ id, label, family, supportsTextToImage, supportsImageToImage }) => ({
+          id,
+          label,
+          family,
+          supportsTextToImage,
+          supportsImageToImage
+        }))
     })),
     options: config.options
   };
@@ -239,61 +286,37 @@ export function mapImageSizeForProvider(model: string, size: string, resolution:
 
 export function validateImageGenerationParams(
   params: ImageGenerationParams,
-  config: ImageServiceConfig = parseImageServiceConfig()
+  config: ImageServiceConfig = parseImageServiceConfig(),
+  options: ImageGenerationValidationOptions = {}
 ): ImageGenerationParamsValidationResult {
+  if (!params.provider) {
+    return invalidParam("provider", "请选择有效的 provider。");
+  }
+
+  if (!params.model) {
+    return invalidParam("model", "请选择当前 provider 支持的 model。");
+  }
+
   const provider = config.providers.find((item) => item.id === params.provider);
 
   if (!provider) {
     return invalidParam("provider", "请选择有效的 provider。");
   }
 
-  if (!provider.models.includes(params.model)) {
+  const model = provider.models.find((item) => item.id === params.model);
+
+  if (!model || !model.enabled) {
     return invalidParam("model", "请选择当前 provider 支持的 model。");
   }
 
-  if (!config.options.sizes.includes(params.size)) {
-    return invalidParam("size", "请选择有效的图片尺寸。");
+  const mode = options.mode ?? "text-to-image";
+
+  if (mode === "text-to-image" && !model.supportsTextToImage) {
+    return invalidParam("model", "请选择支持文生图的 model。");
   }
 
-  const requestedResolution = params.resolution ?? config.defaults.resolution;
-
-  if (!config.options.resolutions.includes(requestedResolution)) {
-    return invalidParam("resolution", "请选择有效的图片分辨率。");
-  }
-
-  const resolution =
-    params.size === "auto" || requestedResolution === "auto" ? "auto" : requestedResolution;
-
-  try {
-    mapImageSizeForProvider(params.model, params.size, resolution);
-  } catch (error) {
-    if (error instanceof Error && error.message === "invalid_generation_size_resolution") {
-      return invalidSizeResolutionParam("resolution", "请选择有效的图片尺寸和分辨率组合。");
-    }
-
-    throw error;
-  }
-
-  if (!config.options.qualities.includes(params.quality)) {
-    return invalidParam("quality", "请选择有效的图片质量。");
-  }
-
-  const outputFormat = params.output_format ?? params.outputFormat;
-
-  if (!outputFormat || !config.options.outputFormats.includes(outputFormat)) {
-    return invalidParam("output_format", "请选择有效的输出格式。");
-  }
-
-  const background = params.background ?? config.defaults.background;
-
-  if (!config.options.backgrounds.includes(background)) {
-    return invalidParam("background", "请选择有效的背景设置。");
-  }
-
-  const moderation = params.moderation ?? config.defaults.moderation;
-
-  if (!config.options.moderations.includes(moderation)) {
-    return invalidParam("moderation", "请选择有效的安全审核设置。");
+  if (mode === "image-edit" && !model.supportsImageToImage) {
+    return invalidParam("model", "请选择支持参考图生图的 model。");
   }
 
   return {
@@ -302,12 +325,12 @@ export function validateImageGenerationParams(
     params: {
       provider: provider.id,
       model: params.model,
-      size: params.size,
-      resolution,
-      quality: params.quality,
-      outputFormat,
-      background,
-      moderation
+      size: "auto",
+      resolution: "auto",
+      quality: "auto",
+      outputFormat: "auto",
+      background: "auto",
+      moderation: "auto"
     }
   };
 }
@@ -340,7 +363,7 @@ function normalizeProviderOption(
   const provider = rawProvider as ProviderOptionInput;
   const id = readRequiredString(provider.id, `IMAGE_PROVIDER_OPTIONS[${index}].id`);
   const label = readRequiredString(provider.label, `IMAGE_PROVIDER_OPTIONS[${index}].label`);
-  const type = readRequiredString(provider.type, `IMAGE_PROVIDER_OPTIONS[${index}].type`);
+  const type = readProviderType(provider.type, `IMAGE_PROVIDER_OPTIONS[${index}].type`);
   const baseUrl = readRequiredString(
     provider.baseUrl,
     `IMAGE_PROVIDER_OPTIONS[${index}].baseUrl`
@@ -349,11 +372,11 @@ function normalizeProviderOption(
     provider.apiKeyEnv,
     `IMAGE_PROVIDER_OPTIONS[${index}].apiKeyEnv`
   );
-  const models = readStringArray(provider.models, `IMAGE_PROVIDER_OPTIONS[${index}].models`);
-
-  if (type !== "openai-compatible-images") {
-    throw new Error(`provider ${id} 的 type 不受支持。`);
-  }
+  const authStyle = readOptionalAuthStyle(
+    provider.authStyle,
+    `IMAGE_PROVIDER_OPTIONS[${index}].authStyle`
+  );
+  const models = readProviderModels(provider.models, `IMAGE_PROVIDER_OPTIONS[${index}].models`);
 
   if (!URL.canParse(baseUrl)) {
     throw new Error(`provider ${id} 的 baseUrl 必须是有效 URL。`);
@@ -372,6 +395,7 @@ function normalizeProviderOption(
     baseUrl,
     apiKeyEnv,
     apiKey,
+    authStyle,
     models
   };
 }
@@ -390,41 +414,51 @@ function parseCsvOption(rawValue: string, variableName: string): string[] {
 }
 
 function assertDefaultConfigIsAllowed(config: ImageServiceConfig) {
-  const provider = config.providers.find((item) => item.id === config.defaultProvider);
+  const provider = config.providers.find((item) => item.id === config.defaultProviderId);
 
   if (!provider) {
     throw new Error("默认 provider 必须存在于 provider allowlist。");
   }
 
-  if (!provider.models.includes(config.defaults.model)) {
+  const model = provider.models.find((item) => item.id === config.defaultModelId && item.enabled);
+
+  if (!model) {
     throw new Error("默认 model 必须存在于默认 provider 的 model allowlist。");
   }
+}
 
-  if (!config.options.sizes.includes(config.defaults.size)) {
-    throw new Error("默认 size 必须存在于 size allowlist。");
+function readProviderType(value: unknown, fieldName: string): ProviderType {
+  const type = readRequiredString(value, fieldName);
+
+  if (type !== "openai-compatible-images" && type !== "gemini-generate-content") {
+    throw new Error(`${fieldName} 不受支持。`);
   }
 
-  if (!config.options.resolutions.includes(config.defaults.resolution)) {
-    throw new Error("默认 resolution 必须存在于 resolution allowlist。");
+  return type;
+}
+
+function readModelFamily(value: unknown, fieldName: string): ImageModelFamily {
+  const family = readRequiredString(value, fieldName);
+
+  if (family !== "chatgpt" && family !== "gemini") {
+    throw new Error(`${fieldName} 不受支持。`);
   }
 
-  mapImageSizeForProvider(config.defaults.model, config.defaults.size, config.defaults.resolution);
+  return family;
+}
 
-  if (!config.options.qualities.includes(config.defaults.quality)) {
-    throw new Error("默认 quality 必须存在于 quality allowlist。");
+function readOptionalAuthStyle(value: unknown, fieldName: string): ImageProviderAuthStyle | undefined {
+  if (value == null || value === "") {
+    return undefined;
   }
 
-  if (!config.options.outputFormats.includes(config.defaults.outputFormat)) {
-    throw new Error("默认 output_format 必须存在于 output_format allowlist。");
+  const authStyle = readRequiredString(value, fieldName);
+
+  if (authStyle !== "bearer" && authStyle !== "api-key-header" && authStyle !== "query-key") {
+    throw new Error(`${fieldName} 不受支持。`);
   }
 
-  if (!config.options.backgrounds.includes(config.defaults.background)) {
-    throw new Error("默认 background 必须存在于 background allowlist。");
-  }
-
-  if (!config.options.moderations.includes(config.defaults.moderation)) {
-    throw new Error("默认 moderation 必须存在于 moderation allowlist。");
-  }
+  return authStyle;
 }
 
 function readRequiredString(value: unknown, fieldName: string): string {
@@ -435,19 +469,76 @@ function readRequiredString(value: unknown, fieldName: string): string {
   return value.trim();
 }
 
-function readStringArray(value: unknown, fieldName: string): string[] {
-  if (!Array.isArray(value)) {
-    throw new Error(`${fieldName} 必须是字符串数组。`);
+function readBoolean(value: unknown, defaultValue: boolean): boolean {
+  if (value == null) {
+    return defaultValue;
   }
 
-  const values = value.map((item) => readRequiredString(item, fieldName));
-  const uniqueValues = [...new Set(values)];
+  if (typeof value !== "boolean") {
+    throw new Error("布尔配置必须是 true 或 false。");
+  }
 
-  if (uniqueValues.length === 0) {
+  return value;
+}
+
+function readOptionalString(value: unknown): string | undefined {
+  if (value == null || value === "") {
+    return undefined;
+  }
+
+  if (typeof value !== "string") {
+    throw new Error("可选字符串配置必须是字符串。");
+  }
+
+  return value.trim() || undefined;
+}
+
+function readProviderModels(value: unknown, fieldName: string): ProviderModelConfig[] {
+  if (!Array.isArray(value)) {
+    throw new Error(`${fieldName} 必须是字符串或对象数组。`);
+  }
+
+  const models = value.map((item, index) =>
+    normalizeProviderModelOption(item, `${fieldName}[${index}]`)
+  );
+  const uniqueModels = Array.from(new Map(models.map((model) => [model.id, model])).values());
+
+  if (uniqueModels.length === 0) {
     throw new Error(`${fieldName} 必须至少包含一个值。`);
   }
 
-  return uniqueValues;
+  return uniqueModels;
+}
+
+function normalizeProviderModelOption(rawModel: unknown, fieldName: string): ProviderModelConfig {
+  if (typeof rawModel === "string" && rawModel.trim()) {
+    const id = rawModel.trim();
+
+    return {
+      id,
+      label: id,
+      family: "chatgpt",
+      enabled: true,
+      supportsTextToImage: true,
+      supportsImageToImage: true
+    };
+  }
+
+  if (!rawModel || typeof rawModel !== "object") {
+    throw new Error(`${fieldName} 必须是字符串或对象。`);
+  }
+
+  const model = rawModel as Record<string, unknown>;
+
+  return {
+    id: readRequiredString(model.id, `${fieldName}.id`),
+    label: readRequiredString(model.label, `${fieldName}.label`),
+    family: readModelFamily(model.family, `${fieldName}.family`),
+    enabled: readBoolean(model.enabled, true),
+    supportsTextToImage: readBoolean(model.supportsTextToImage, false),
+    supportsImageToImage: readBoolean(model.supportsImageToImage, false),
+    note: readOptionalString(model.note)
+  };
 }
 
 function invalidParam(field: string, message: string): ImageGenerationParamsValidationResult {
