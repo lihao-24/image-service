@@ -48,23 +48,18 @@ type SaveStatus = "idle" | "saving" | "saved" | "error";
 
 export default function ImageWorkbench({ config, userLabel }: ImageWorkbenchProps) {
   const isMobileViewport = useIsMobileViewport();
-  const provider = useMemo(
-    () =>
-      config.providers.find((item) => item.id === config.defaultProvider) ??
-      config.providers[0],
-    [config.defaultProvider, config.providers]
-  );
-  const providerId = provider?.id ?? config.defaultProvider;
   const [params, setParams] = useState<GenerationParamsSnapshot>({
-    provider: providerId,
-    model: config.defaults.model,
-    size: config.defaults.size,
-    resolution: config.defaults.resolution ?? "auto",
-    quality: config.defaults.quality,
-    outputFormat: config.defaults.outputFormat,
-    background: config.defaults.background ?? "auto",
-    moderation: config.defaults.moderation ?? "auto"
+    provider: readInitialProviderId(config),
+    model: readInitialModelId(config)
   });
+  const provider = useMemo(
+    () => findProvider(config, params.provider) ?? config.providers[0],
+    [config, params.provider]
+  );
+  const providerLabels = useMemo(
+    () => Object.fromEntries(config.providers.map((item) => [item.id, item.label])),
+    [config.providers]
+  );
   const [mode, setMode] = useState<GenerationMode>("text-to-image");
   const [prompt, setPrompt] = useState("");
   const [referenceImage, setReferenceImage] = useState<File | null>(null);
@@ -75,7 +70,6 @@ export default function ImageWorkbench({ config, userLabel }: ImageWorkbenchProp
   const [isGenerating, setIsGenerating] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
-  const [settingsExpanded, setSettingsExpanded] = useState(false);
   const [templateModal, setTemplateModal] = useState<TemplateModalState>({ open: false });
   const [library, setLibrary] = useState<TemplateLibrary | null>(null);
   const [usageText, setUsageText] = useState("");
@@ -140,8 +134,42 @@ export default function ImageWorkbench({ config, userLabel }: ImageWorkbenchProp
     }
   }
 
-  function updateParams(nextParams: Partial<GenerationParamsSnapshot>) {
-    setParams((current) => ({ ...current, ...nextParams, provider: providerId }));
+  function updateParams(
+    nextParams: Partial<GenerationParamsSnapshot>,
+    targetMode: GenerationMode = mode
+  ) {
+    setParams((current) => {
+      if (nextParams.provider && nextParams.provider !== current.provider) {
+        const nextProvider = findProvider(config, nextParams.provider);
+        if (!nextProvider) {
+          const currentProvider = findProvider(config, current.provider);
+          return {
+            provider: current.provider,
+            model: readFirstSupportedModelId(currentProvider, targetMode) ?? current.model
+          };
+        }
+        const requestedModel = nextParams.model
+          ? findModel(nextProvider, nextParams.model)?.id
+          : undefined;
+        return {
+          provider: nextProvider.id,
+          model:
+            readSupportedModelId(nextProvider, requestedModel, targetMode) ??
+            readFirstSupportedModelId(nextProvider, targetMode) ??
+            current.model
+        };
+      }
+
+      const nextProvider = findProvider(config, current.provider);
+      const requestedModel = nextParams.model ?? current.model;
+      return {
+        provider: current.provider,
+        model:
+          readSupportedModelId(nextProvider, requestedModel, targetMode) ??
+          readFirstSupportedModelId(nextProvider, targetMode) ??
+          current.model
+      };
+    });
   }
 
   function useTemplate(payload: {
@@ -149,20 +177,14 @@ export default function ImageWorkbench({ config, userLabel }: ImageWorkbenchProp
     mode: GenerationMode;
     params: GenerationParamsSnapshot;
   }) {
-    const templateSizeAllowed = config.options.sizes.includes(payload.params.size);
     setPrompt(payload.prompt);
-    updateParams({
-      model: payload.params.model,
-      size: templateSizeAllowed ? payload.params.size : params.size,
-      resolution: payload.params.resolution,
-      quality: templateSizeAllowed && config.options.qualities.includes(payload.params.quality)
-        ? payload.params.quality
-        : params.quality,
-      outputFormat: payload.params.outputFormat,
-      background: payload.params.background,
-      moderation: payload.params.moderation
-    });
     setMode(payload.mode);
+    updateParams(payload.params, payload.mode);
+  }
+
+  function handleModeChange(nextMode: GenerationMode) {
+    setMode(nextMode);
+    updateParams({}, nextMode);
   }
 
   function handleReferenceImageChange(file: File | null) {
@@ -288,7 +310,7 @@ export default function ImageWorkbench({ config, userLabel }: ImageWorkbenchProp
       }
 
       const b64Json = payload.image?.b64_json?.trim();
-      const format = payload.image?.output_format || generationParams.outputFormat;
+      const format = payload.image?.output_format || "png";
 
       if (!b64Json) {
         throw new Error(SAFE_PROVIDER_ERROR_MESSAGE);
@@ -336,13 +358,7 @@ export default function ImageWorkbench({ config, userLabel }: ImageWorkbenchProp
     const baseFields = {
       provider: generationParams.provider,
       model: generationParams.model,
-      prompt: promptText,
-      size: generationParams.size,
-      resolution: generationParams.resolution ?? "auto",
-      quality: generationParams.quality,
-      output_format: generationParams.outputFormat,
-      background: generationParams.background ?? "auto",
-      moderation: generationParams.moderation ?? "auto"
+      prompt: promptText
     };
 
     if (generationMode === "text-to-image") {
@@ -370,7 +386,7 @@ export default function ImageWorkbench({ config, userLabel }: ImageWorkbenchProp
   function editUserMessage(message: WorkbenchUserMessage) {
     setPrompt(message.prompt);
     setMode(message.mode);
-    updateParams(message.params);
+    updateParams(message.params, message.mode);
 
     if (message.mode === "image-edit") {
       setReferenceImage(null);
@@ -412,7 +428,7 @@ export default function ImageWorkbench({ config, userLabel }: ImageWorkbenchProp
 
     setPrompt(assistantMessage.prompt);
     setMode(assistantMessage.mode);
-    updateParams(assistantMessage.params);
+    updateParams(assistantMessage.params, assistantMessage.mode);
     if (assistantMessage.mode === "image-edit") {
       setReferenceImage(null);
       if (composerPreviewUrlRef.current) {
@@ -442,12 +458,6 @@ export default function ImageWorkbench({ config, userLabel }: ImageWorkbenchProp
           mode: saveTarget.mode,
           provider: saveTarget.params.provider,
           model: saveTarget.params.model,
-          size: saveTarget.params.size,
-          resolution: saveTarget.params.resolution,
-          quality: saveTarget.params.quality,
-          output_format: saveTarget.params.outputFormat,
-          background: saveTarget.params.background,
-          moderation: saveTarget.params.moderation,
           reference_mode: saveTarget.mode === "image-edit" ? "single-image" : null
         })
       });
@@ -484,12 +494,11 @@ export default function ImageWorkbench({ config, userLabel }: ImageWorkbenchProp
           categories={library?.categories ?? []}
           config={config}
           mineTemplates={library?.templates.mine ?? []}
+          mode={mode}
           onOpenTemplates={setTemplateModal}
           onParamChange={updateParams}
-          onSettingsExpandedChange={setSettingsExpanded}
           params={params}
           provider={provider}
-          settingsExpanded={settingsExpanded}
           usageText={usageText}
           userLabel={userLabel}
         />
@@ -508,16 +517,15 @@ export default function ImageWorkbench({ config, userLabel }: ImageWorkbenchProp
             categories={library?.categories ?? []}
             config={config}
             mineTemplates={library?.templates.mine ?? []}
+            mode={mode}
             onClose={() => setMobileDrawerOpen(false)}
             onOpenTemplates={(state) => {
               setTemplateModal(state);
               setMobileDrawerOpen(false);
             }}
             onParamChange={updateParams}
-            onSettingsExpandedChange={setSettingsExpanded}
             params={params}
             provider={provider}
-            settingsExpanded={settingsExpanded}
             usageText={usageText}
             userLabel={userLabel}
           />
@@ -563,6 +571,7 @@ export default function ImageWorkbench({ config, userLabel }: ImageWorkbenchProp
         <div className="min-h-0 flex-1 overflow-y-auto bg-white">
           <MessageList
             messages={messages}
+            providerLabels={providerLabels}
             onEditAssistantMessage={editAssistantMessage}
             onEditUserMessage={editUserMessage}
             onOpenTemplateCategory={(categoryId, title) =>
@@ -587,7 +596,7 @@ export default function ImageWorkbench({ config, userLabel }: ImageWorkbenchProp
         <PromptComposer
           generating={isGenerating}
           mode={mode}
-          onModeChange={setMode}
+          onModeChange={handleModeChange}
           onPromptChange={setPrompt}
           onReferenceImageChange={handleReferenceImageChange}
           onSubmit={handleGenerate}
@@ -637,4 +646,47 @@ function readIsMobileViewport() {
   }
 
   return window.innerWidth < 768;
+}
+
+function findProvider(config: PublicImageConfig, providerId: string) {
+  return config.providers.find((item) => item.id === providerId);
+}
+
+function findModel(provider: ReturnType<typeof findProvider>, modelId: string) {
+  return provider?.models.find((item) => item.id === modelId);
+}
+
+function readSupportedModelId(
+  provider: ReturnType<typeof findProvider>,
+  modelId: string | undefined,
+  mode: GenerationMode
+) {
+  const model = modelId ? findModel(provider, modelId) : undefined;
+  if (!model) {
+    return undefined;
+  }
+
+  if (mode === "image-edit") {
+    return model.supportsImageToImage ? model.id : undefined;
+  }
+
+  return model.supportsTextToImage ? model.id : undefined;
+}
+
+function readInitialProviderId(config: PublicImageConfig) {
+  return findProvider(config, config.defaultProviderId)?.id ?? config.providers[0]?.id ?? "";
+}
+
+function readInitialModelId(config: PublicImageConfig) {
+  const provider = findProvider(config, readInitialProviderId(config));
+  return findModel(provider, config.defaultModelId)?.id ?? provider?.models[0]?.id ?? "";
+}
+
+function readFirstSupportedModelId(
+  provider: ReturnType<typeof findProvider>,
+  mode: GenerationMode
+) {
+  return provider?.models.find((item) =>
+    mode === "image-edit" ? item.supportsImageToImage : item.supportsTextToImage
+  )?.id;
 }

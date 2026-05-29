@@ -2,6 +2,7 @@ import Image from "next/image";
 import { useState } from "react";
 import type { PublicImageConfig, PublicProviderConfig } from "@/lib/config";
 import type {
+  GenerationMode,
   GenerationParamsSnapshot,
   MineTemplateRecord,
   TemplateCategory,
@@ -14,11 +15,10 @@ type ChatSidebarProps = {
   className?: string;
   config: PublicImageConfig;
   provider?: PublicProviderConfig;
+  mode: GenerationMode;
   params: GenerationParamsSnapshot;
   userLabel: string;
   usageText: string;
-  settingsExpanded: boolean;
-  onSettingsExpandedChange: (expanded: boolean) => void;
   onParamChange: (params: Partial<GenerationParamsSnapshot>) => void;
   categories: TemplateCategory[];
   mineTemplates: MineTemplateRecord[];
@@ -27,65 +27,15 @@ type ChatSidebarProps = {
 };
 
 type TemplateListView = "default" | "mine";
-type OptionLabels = Record<string, string>;
-
-const SIZE_LABELS: OptionLabels = {
-  auto: "自动",
-  "1:1": "方图 1:1",
-  "3:2": "横图 3:2",
-  "2:3": "竖图 2:3",
-  "16:9": "宽屏 16:9",
-  "9:16": "竖屏 9:16"
-};
-
-const RESOLUTION_LABELS: OptionLabels = {
-  auto: "自动",
-  standard: "标准",
-  hd: "高清",
-  "4k": "4K"
-};
-
-const QUALITY_LABELS: OptionLabels = {
-  auto: "自动",
-  low: "草稿",
-  medium: "标准",
-  high: "高质量"
-};
-
-const OUTPUT_FORMAT_LABELS: OptionLabels = {
-  png: "PNG",
-  jpeg: "JPEG",
-  webp: "WebP"
-};
-
-const BACKGROUND_LABELS: OptionLabels = {
-  auto: "自动",
-  opaque: "不透明"
-};
-
-const MODERATION_LABELS: OptionLabels = {
-  auto: "自动",
-  low: "宽松"
-};
-
-const RESOLUTIONS_BY_SIZE: Record<string, string[]> = {
-  auto: ["auto"],
-  "1:1": ["standard", "hd"],
-  "3:2": ["standard", "hd"],
-  "2:3": ["standard", "hd"],
-  "16:9": ["standard", "hd", "4k"],
-  "9:16": ["standard", "hd", "4k"]
-};
 
 export function ChatSidebar({
   className = "flex h-full w-[280px] shrink-0 flex-col overflow-hidden bg-slate-950 px-4 py-4 text-slate-100 shadow-2xl",
   config,
   provider,
+  mode,
   params,
   userLabel,
   usageText,
-  settingsExpanded,
-  onSettingsExpandedChange,
   onParamChange,
   categories,
   mineTemplates,
@@ -94,10 +44,10 @@ export function ChatSidebar({
 }: ChatSidebarProps) {
   const [templateListView, setTemplateListView] = useState<TemplateListView>("default");
   const [usageOpen, setUsageOpen] = useState(false);
-  const resolutionOptions = readResolutionOptions(params.size, config.options.resolutions);
-  const selectedResolution = resolutionOptions.includes(params.resolution ?? "")
-    ? (params.resolution ?? "auto")
-    : resolutionOptions[0] ?? "auto";
+  const modelOptions =
+    provider?.models.filter((item) =>
+      mode === "image-edit" ? item.supportsImageToImage : item.supportsTextToImage
+    ) ?? [];
 
   return (
     <aside
@@ -134,141 +84,40 @@ export function ChatSidebar({
       <section className="shrink-0 rounded-xl border border-white/10 bg-white/[0.04] p-3">
         <div className="mb-2 flex items-center justify-between gap-3">
           <h2 className="m-0 text-sm font-semibold text-white">设置</h2>
-          <button
-            className="min-h-9 rounded-lg px-2.5 text-xs font-semibold text-slate-200 transition hover:bg-white/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300"
-            onClick={() => onSettingsExpandedChange(!settingsExpanded)}
-            type="button"
-          >
-            {settingsExpanded ? "收起设置" : "展开设置"}
-          </button>
         </div>
 
         <div className="grid gap-2.5">
-          {settingsExpanded ? (
-            <label className="grid gap-1.5 text-sm font-semibold text-slate-300">
-              <span>Model</span>
-              <select
-                aria-label="Model"
-                className="min-h-10 rounded-lg border border-white/10 bg-slate-900 px-3 text-sm text-white focus:border-indigo-300 focus:outline-none"
-                onChange={(event) => onParamChange({ model: event.target.value })}
-                value={params.model}
-              >
-                {provider?.models.map((item) => (
-                  <option key={item} value={item}>
-                    {item}
-                  </option>
-                ))}
-              </select>
-            </label>
-          ) : null}
-
           <label className="grid gap-1.5 text-sm font-semibold text-slate-300">
-            <span>画面比例</span>
+            <span>供应商</span>
             <select
-              aria-label="画面比例"
+              aria-label="供应商"
               className="min-h-10 rounded-lg border border-white/10 bg-slate-900 px-3 text-sm text-white focus:border-indigo-300 focus:outline-none"
-              onChange={(event) =>
-                onParamChange({
-                  size: event.target.value,
-                  resolution: readResolutionOptions(
-                    event.target.value,
-                    config.options.resolutions
-                  )[0]
-                })
-              }
-              value={params.size}
+              onChange={(event) => onParamChange({ provider: event.target.value })}
+              value={params.provider}
             >
-              {config.options.sizes.map((item) => (
-                <option key={item} value={item}>
-                  {SIZE_LABELS[item] ?? item}
+              {config.providers.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.label}
                 </option>
               ))}
             </select>
           </label>
 
-          {settingsExpanded ? (
-            <>
-              <label className="grid gap-1.5 text-sm font-semibold text-slate-300">
-                <span>分辨率</span>
-                <select
-                  aria-label="分辨率"
-                  className="min-h-10 rounded-lg border border-white/10 bg-slate-900 px-3 text-sm text-white focus:border-indigo-300 focus:outline-none"
-                  onChange={(event) => onParamChange({ resolution: event.target.value })}
-                  value={selectedResolution}
-                >
-                  {resolutionOptions.map((item) => (
-                    <option key={item} value={item}>
-                      {RESOLUTION_LABELS[item] ?? item}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              <label className="grid gap-1.5 text-sm font-semibold text-slate-300">
-                <span>画质</span>
-                <select
-                  aria-label="画质"
-                  className="min-h-10 rounded-lg border border-white/10 bg-slate-900 px-3 text-sm text-white focus:border-indigo-300 focus:outline-none"
-                  onChange={(event) => onParamChange({ quality: event.target.value })}
-                  value={params.quality}
-                >
-                  {config.options.qualities.map((item) => (
-                    <option key={item} value={item}>
-                      {QUALITY_LABELS[item] ?? item}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              <label className="grid gap-1.5 text-sm font-semibold text-slate-300">
-                <span>输出格式</span>
-                <select
-                  aria-label="输出格式"
-                  className="min-h-10 rounded-lg border border-white/10 bg-slate-900 px-3 text-sm text-white focus:border-indigo-300 focus:outline-none"
-                  onChange={(event) => onParamChange({ outputFormat: event.target.value })}
-                  value={params.outputFormat}
-                >
-                  {config.options.outputFormats.map((item) => (
-                    <option key={item} value={item}>
-                      {OUTPUT_FORMAT_LABELS[item] ?? item}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              <label className="grid gap-1.5 text-sm font-semibold text-slate-300">
-                <span>背景</span>
-                <select
-                  aria-label="背景"
-                  className="min-h-10 rounded-lg border border-white/10 bg-slate-900 px-3 text-sm text-white focus:border-indigo-300 focus:outline-none"
-                  onChange={(event) => onParamChange({ background: event.target.value })}
-                  value={params.background ?? "auto"}
-                >
-                  {(config.options.backgrounds ?? ["auto", "opaque"]).map((item) => (
-                    <option key={item} value={item}>
-                      {BACKGROUND_LABELS[item] ?? item}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              <label className="grid gap-1.5 text-sm font-semibold text-slate-300">
-                <span>安全审核</span>
-                <select
-                  aria-label="安全审核"
-                  className="min-h-10 rounded-lg border border-white/10 bg-slate-900 px-3 text-sm text-white focus:border-indigo-300 focus:outline-none"
-                  onChange={(event) => onParamChange({ moderation: event.target.value })}
-                  value={params.moderation ?? "auto"}
-                >
-                  {(config.options.moderations ?? ["auto", "low"]).map((item) => (
-                    <option key={item} value={item}>
-                      {MODERATION_LABELS[item] ?? item}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </>
-          ) : null}
+          <label className="grid gap-1.5 text-sm font-semibold text-slate-300">
+            <span>模型</span>
+            <select
+              aria-label="模型"
+              className="min-h-10 rounded-lg border border-white/10 bg-slate-900 px-3 text-sm text-white focus:border-indigo-300 focus:outline-none"
+              onChange={(event) => onParamChange({ model: event.target.value })}
+              value={params.model}
+            >
+              {modelOptions.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.label}
+                </option>
+              ))}
+            </select>
+          </label>
         </div>
       </section>
 
@@ -353,7 +202,8 @@ export function ChatSidebar({
                 >
                   <span className="block min-w-0 truncate overflow-hidden">{template.title}</span>
                   <span className="block min-w-0 truncate overflow-hidden text-xs font-normal text-slate-500">
-                    {template.size} · {template.quality}
+                    {template.provider ? `${template.provider} · ` : ""}
+                    {template.model}
                   </span>
                 </button>
               ))}
@@ -419,10 +269,4 @@ export function ChatSidebar({
       ) : null}
     </aside>
   );
-}
-
-function readResolutionOptions(size: string, configuredOptions?: string[]): string[] {
-  const allowed = RESOLUTIONS_BY_SIZE[size] ?? ["auto"];
-  const configured = configuredOptions ?? ["auto", "standard", "hd", "4k"];
-  return allowed.filter((item) => configured.includes(item));
 }

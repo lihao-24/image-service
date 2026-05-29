@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import { parseAspectRatio } from "./helpers";
 import {
   CollapseIcon,
   CopyIcon,
@@ -19,6 +18,7 @@ type ImagePreview = {
 
 type MessageListProps = {
   messages: WorkbenchMessage[];
+  providerLabels: Record<string, string>;
   onOpenTemplateCategory: (categoryId: string, title: string) => void;
   onEditUserMessage: (message: WorkbenchUserMessage) => void;
   onEditAssistantMessage: (messageId: string) => void;
@@ -29,6 +29,7 @@ type MessageListProps = {
 
 export function MessageList({
   messages,
+  providerLabels,
   onOpenTemplateCategory,
   onEditAssistantMessage,
   onEditUserMessage,
@@ -96,6 +97,7 @@ export function MessageList({
           <UserMessage
             key={message.id}
             message={message}
+            providerLabels={providerLabels}
             onEdit={() => onEditUserMessage(message)}
             onPreviewImage={(image) => setPreview(image)}
             onToggle={() => onToggleCollapse(message.id)}
@@ -104,6 +106,7 @@ export function MessageList({
           <AssistantMessage
             key={message.id}
             message={message}
+            providerLabels={providerLabels}
             onEdit={() => onEditAssistantMessage(message.id)}
             onPreviewImage={(image) => setPreview(image)}
             onRegenerate={() => onRegenerate(message.id)}
@@ -120,11 +123,13 @@ export function MessageList({
 
 function UserMessage({
   message,
+  providerLabels,
   onEdit,
   onPreviewImage,
   onToggle
 }: {
   message: WorkbenchUserMessage;
+  providerLabels: Record<string, string>;
   onEdit: () => void;
   onPreviewImage: (image: ImagePreview) => void;
   onToggle: () => void;
@@ -163,8 +168,7 @@ function UserMessage({
       <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
         <div className="flex flex-wrap gap-2 text-xs font-semibold text-slate-300">
           <span>{message.mode === "image-edit" ? "图生图" : "文生图"}</span>
-          <span>{message.params.size}</span>
-          <span>{message.params.quality}</span>
+          <span>{formatModelLabel(message.params.provider, message.params.model, providerLabels)}</span>
         </div>
         <div className="flex flex-wrap gap-2">
           {isLong ? (
@@ -205,18 +209,21 @@ function UserMessage({
 
 function AssistantMessage({
   message,
+  providerLabels,
   onEdit,
   onPreviewImage,
   onRegenerate,
   onSaveRecipe
 }: {
   message: Extract<WorkbenchMessage, { role: "assistant" }>;
+  providerLabels: Record<string, string>;
   onEdit: () => void;
   onPreviewImage: (image: ImagePreview) => void;
   onRegenerate: () => void;
   onSaveRecipe: () => void;
 }) {
-  const ratio = parseAspectRatio(message.params.size);
+  const modelLabel = formatModelLabel(message.params.provider, message.params.model, providerLabels);
+  const previewAspectRatio = "1 / 1";
 
   if (message.status === "loading") {
     return (
@@ -224,7 +231,7 @@ function AssistantMessage({
         <div
           aria-label="图片生成占位状态"
           className="relative max-h-[min(42dvh,420px)] min-h-[220px] w-full overflow-hidden rounded-2xl border border-slate-200 bg-slate-100 text-slate-500 shadow-sm"
-          style={{ aspectRatio: ratio }}
+          style={{ aspectRatio: previewAspectRatio }}
         >
           <div className="absolute inset-0 animate-[focal-shimmer_1.4s_ease-in-out_infinite] bg-[linear-gradient(110deg,transparent,rgba(255,255,255,0.72),transparent)]" />
           <div className="relative grid h-full place-items-center p-6">
@@ -233,7 +240,7 @@ function AssistantMessage({
                 <SparkIcon className="h-5 w-5" />
               </span>
               <span className="font-semibold">AI 正在生成图片...</span>
-              <span className="text-sm text-slate-400">保持画布比例，完成后会自动替换</span>
+              <span className="text-sm text-slate-400">{modelLabel}</span>
             </div>
           </div>
         </div>
@@ -280,7 +287,7 @@ function AssistantMessage({
             onPreviewImage({ alt: "AI 生成图片预览", src: message.image.src });
           }
         }}
-        style={{ aspectRatio: ratio }}
+        style={{ aspectRatio: previewAspectRatio }}
         type="button"
       >
         {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -322,6 +329,11 @@ function AssistantMessage({
       </div>
     </article>
   );
+}
+
+function formatModelLabel(providerId: string, modelId: string, providerLabels: Record<string, string>) {
+  const providerLabel = providerLabels[providerId];
+  return providerLabel ? `${providerLabel} · ${modelId}` : modelId;
 }
 
 function ImagePreviewDialog({
