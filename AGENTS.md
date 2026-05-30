@@ -4,7 +4,7 @@
 
 - `image-service` 是个人 AI 服务体系中的生图网页服务。
 - 当前技术栈是 Next.js App Router、React、TypeScript、Vitest、SQLite、Supabase Auth。
-- 重点能力包括登录后的生图工作台、OpenAI 兼容 Images API provider、Prompt 模板/配方、用量限制和生成日志。
+- 重点能力包括登录后的生图工作台、OpenAI 兼容 Images API 与 Gemini generateContent 图片 provider、Prompt 模板/配方、用量限制和生成日志。
 - 测试默认使用 mock provider，不应在测试中调用真实图片 provider。
 
 ## 先读入口
@@ -14,7 +14,7 @@
 - 产品/设计细节看 `docs/specs/`。
 - 执行计划和阶段背景看 `docs/plans/`。
 - 数据和存储约束看 `docs/reference/data-and-storage.md`。
-- OpenAI 兼容图片接口细节看 `docs/reference/openai-compatible-images-api.md`。
+- 当前 provider 与图片接口细节看 `docs/reference/openai-compatible-images-api.md`。
 
 ## 目录地图
 
@@ -31,7 +31,7 @@
 - `src/lib/config/`：服务端图片配置解析、provider allowlist、公开配置投影和参数校验。
 - `src/lib/db/`：SQLite 连接、schema、按用户隔离的数据访问 helper。
 - `src/lib/images/`：图片请求体校验、参考图校验、临时图片响应。
-- `src/lib/providers/`：图片 provider adapter 接口和 OpenAI 兼容 Images API 实现。
+- `src/lib/providers/`：图片 provider adapter 接口、OpenAI 兼容 Images API 实现和 Gemini generateContent 实现。
 - `src/lib/usage/`：每日额度、用量统计和生成日志。
 - `src/lib/recipes/`：Prompt 配方校验和按用户隔离的 CRUD helper。
 - `src/lib/prompt-templates/`：内置模板、分类、模板渲染和模板索引。

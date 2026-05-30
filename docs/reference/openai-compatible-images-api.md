@@ -1,21 +1,44 @@
-# OpenAI 兼容 Images API 参考
+# Provider 与图片接口参考
 
-本文记录 image-service 当前对接的 OpenAI-compatible Images API 形态。
+本文记录 image-service 当前对接图片 provider 的稳定调用约束。当前主流程已瘦身为
+provider、model、prompt 和可选参考图；尺寸、质量、输出格式、背景、moderation 等旧参数不再作为
+主流程参数发送给上游。
 
-## Provider
+## Provider 配置
+
+服务端通过 `IMAGE_PROVIDER_OPTIONS` 配置 provider -> models 二级 JSON，并通过
+`IMAGE_DEFAULT_PROVIDER`、`IMAGE_DEFAULT_MODEL` 选择默认模型。默认值保持：
 
 ```text
-id: sub2api
+provider: toioto
 model: gpt-image-2
 ```
 
-`gpt-image-2` 当前作为默认 GPT Image 模型，通过 `sub2api` 这个
-OpenAI-compatible provider 调用。provider base URL、API key 环境变量名和真实
-API key 只能留在服务端配置与调用链路中，不新增写入文档或 Git。
+provider base URL 和 API key 环境变量名可以写入服务端配置模板和文档，用于部署与排障；真实
+API key 不写入 Git。`baseUrl`、`apiKeyEnv` 和 API key 都不得进入前端公开配置、SQLite 或日志。
 
-## 文生图
+当前支持的 provider type：
 
-Endpoint:
+- `openai-compatible-images`：OpenAI Images API 兼容形状。
+- `gemini-generate-content`：Gemini `generateContent` 形状。
+
+当前 env 模板中的 provider：
+
+- `toioto`：`openai-compatible-images`，`baseUrl=https://sub2api.toioto.org/v1`，
+  `apiKeyEnv=SUB2API_API_KEY`，模型 `gpt-image-2`。
+- `fastcode`：`openai-compatible-images`，`baseUrl=https://timebackward.com/v1`，
+  `apiKeyEnv=FASTCODE_API_KEY`，模型 `gpt-image-2-2k`、`gpt-image-2-4k`。
+- `fastcode-gemini`：`gemini-generate-content`，`baseUrl=https://timebackward.com/v1beta`，
+  `apiKeyEnv=FASTCODE_API_KEY`，`authStyle=api-key-header`，模型
+  `gemini-3.1-flash-image-preview`，展示名 `Gemini 3.1 Flash`。
+
+新增 provider 时必须先确认上游接口形状。Gemini `generateContent` 形状的模型应放入独立
+`gemini-generate-content` provider；不要放进 `openai-compatible-images` provider 下，除非上游
+明确包装成 OpenAI Images API 形状并经过实测。
+
+## OpenAI-Compatible 文生图
+
+Endpoint：
 
 ```http
 POST /v1/images/generations
@@ -26,24 +49,20 @@ POST /v1/images/generations
 ```json
 {
   "model": "gpt-image-2",
-  "prompt": "用户输入的提示词",
-  "size": "auto",
-  "quality": "auto",
-  "output_format": "png",
-  "background": "auto",
-  "moderation": "auto"
+  "prompt": "用户输入的提示词"
 }
 ```
 
 取结果：
 
 ```js
-const b64 = response.data[0].b64_json
+const imageItem = response.data[0]
+const b64 = imageItem.b64_json
 ```
 
-## 参考图生图
+## OpenAI-Compatible 参考图生图
 
-Endpoint:
+Endpoint：
 
 ```http
 POST /v1/images/edits
@@ -56,11 +75,6 @@ Content-Type: multipart/form-data
 model = gpt-image-2
 image = 用户上传的参考图文件
 prompt = 用户输入的提示词
-size = auto
-quality = auto
-output_format = png
-background = auto
-moderation = auto
 ```
 
 取结果时要处理中转站返回格式：
@@ -72,75 +86,100 @@ const b64 = imageItem.b64_json
 
 说明：
 
+- OpenAI-compatible provider 可以返回 `b64_json` 或 `url`。返回 `url` 时，后端会下载图片并转为
+  base64 临时响应；该 URL 不写入 SQLite 或日志。
 - `data[0]` 通常是原图。
 - `data[1]` 通常是修改后的图。
 - 后端应优先使用 `data[1]`。
 - 没有第二张时再回退到 `data[0]`。
 
-## 参数 allowlist
+## Gemini GenerateContent 文生图
 
-当前默认值：
+Endpoint：
 
-```text
-models: gpt-image-2
-size: auto
-resolution: auto
-quality: auto
-output_format: png
-background: auto
-moderation: auto
+```http
+POST /v1beta/models/{model}:generateContent
+x-goog-api-key: <apiKey>
+Content-Type: application/json
 ```
 
-公开选项：
+请求 JSON：
 
-```text
-sizes: auto, 1:1, 3:2, 2:3, 16:9, 9:16
-resolutions: auto, standard, hd, 4k
-qualities: auto, high, medium, low
-output_formats: png, jpeg, webp
-backgrounds: auto, opaque
-moderations: auto, low
+```json
+{
+  "contents": [
+    {
+      "parts": [
+        {
+          "text": "用户输入的提示词"
+        }
+      ]
+    }
+  ]
+}
 ```
 
-前端只展示服务端返回的 allowlist，不允许用户直接输入 provider base URL。
+## Gemini GenerateContent 参考图生图
+
+Endpoint 同文生图。请求 JSON：
+
+```json
+{
+  "contents": [
+    {
+      "parts": [
+        {
+          "text": "用户输入的提示词"
+        },
+        {
+          "inline_data": {
+            "mime_type": "image/png",
+            "data": "<base64-reference-image>"
+          }
+        }
+      ]
+    }
+  ]
+}
+```
+
+响应解析：
+
+- 遍历 `candidates[].content.parts[]`。
+- 图片可能出现在 `inlineData` 或 REST JSON 的 `inline_data`。
+- 图片数据字段为 base64 `data`，MIME 字段为 `mimeType` 或 `mime_type`。
+- 如果只有文本没有图片，归一化为 `provider_response_invalid`。
+
+## 参数与 allowlist
+
+当前稳定请求参数：
+
+```text
+provider
+model
+prompt
+image（仅参考图生图）
+```
 
 后端规则：
 
-- 生成接口和保存配置接口都必须重复校验 allowlist。
+- 生成接口和保存配置接口都必须重复校验 provider/model allowlist。
 - 客户端只能提交 provider id，不能提交 base URL、apiKeyEnv 或 provider 配置对象。
 - provider id 必须存在于服务端配置中，model 必须属于该 provider 的 models。
-- size、resolution、quality、output_format、background、moderation 必须来自服务端配置的公开选项。
-- 前端尺寸语义是“比例 + 分辨率档位”；后端对 `gpt-image-2` 映射为符合官方自定义尺寸规则的 API `size`。
-- 如果比例是 `auto`，分辨率只能是 `auto`。
-- 如果分辨率是 `auto`，后端发送 `size=auto`，不推断具体像素。
-- `background=transparent` 暂不开放，因为 `gpt-image-2` 当前不支持透明背景。
+- 文生图要求模型 `supportsTextToImage=true`。
+- 参考图生图要求模型 `supportsImageToImage=true`。
+- 旧字段 `size`、`resolution`、`quality`、`output_format`、`outputFormat`、`background`、
+  `moderation` 可被兼容读取，但不参与主流程上游请求。
+- `generation_logs` 中的 `size`、`quality`、`output_format` 等旧字段暂保留兼容占位，新流程通常写
+  `auto` 或响应可确认的输出格式。
 
-`gpt-image-2` 尺寸映射表：
-
-| 前端比例 | 分辨率档位 | API size |
-| --- | --- | --- |
-| auto | auto | auto |
-| 1:1 | standard | 1024x1024 |
-| 1:1 | hd | 2048x2048 |
-| 3:2 | standard | 1536x1024 |
-| 3:2 | hd | 2304x1536 |
-| 2:3 | standard | 1024x1536 |
-| 2:3 | hd | 1536x2304 |
-| 16:9 | standard | 1536x864 |
-| 16:9 | hd | 2048x1152 |
-| 16:9 | 4k | 3840x2160 |
-| 9:16 | standard | 864x1536 |
-| 9:16 | hd | 1152x2048 |
-| 9:16 | 4k | 2160x3840 |
-
-`1:1 + 4k` 暂不开放，除非确认中转站支持合法 4K 方图。映射出的尺寸必须满足官方自定义尺寸规则：宽高为 16 的倍数，比例在 1:3 到 3:1，总像素不超过 8,294,400，最长边不超过 3840。
+前端只展示服务端返回的 allowlist，不允许用户直接输入 provider base URL。
 
 暂不开放的参数：
 
 - `n`：保持单张生成，避免成本和用量统计口径复杂化。
 - `stream` / `partial_images`：当前工作台不是流式图片渲染链路。
-- `input_fidelity`：`gpt-image-2` 对图像输入自动高保真处理，当前不允许调整该参数。
-- `outputCompression`：首期不展示、不校验、不发送，避免与 `output_format` 组合带来额外兼容性分支。
+- 尺寸、质量、输出格式、背景、moderation 等上游参数：当前由自然语言 prompt 表达，不做服务端参数映射。
 
 ## 错误处理
 
@@ -177,8 +216,8 @@ OpenAI-compatible adapter 需要读取 provider 非 2xx 响应中的常见错误
 - `[image-provider] invalid provider response`
 - `[image-service] image request failed`
 
-日志只能包含脱敏结构信息：requestId、provider id、endpoint、mode、model、尺寸/质量/格式等
-参数摘要、prompt 长度、HTTP status/statusText、content-type、content-length、响应顶层字段、
+日志只能包含脱敏结构信息：requestId、provider id、endpoint、mode、model、prompt 长度、
+HTTP status/statusText、content-type、content-length、响应顶层字段、
 `data` 数量、前几个 `data` item 的字段名和是否有非空 `b64_json`、provider error code/type。
 非 JSON 响应可记录截断后的 body 预览，但必须先脱敏并限制长度。不得记录 prompt 全文、图片
 base64、上传图片内容、Authorization header、API key、cookie、完整 provider message 或 stack trace。

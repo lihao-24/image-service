@@ -53,7 +53,7 @@
 
 `prompt_recipes` 可以保存用户主动保存的 prompt 和参数，但不能保存生成图片、参考图文件或 provider API key。
 
-`generation_logs` 不保存 prompt 全文。允许保存 provider、model、mode、size、quality、output_format、status、error_code、duration_ms、prompt_length、has_reference_image、created_at 等元信息。
+`generation_logs` 不保存 prompt 全文。允许保存 provider、model、mode、status、error_code、duration_ms、prompt_length、has_reference_image、created_at 等元信息。`size`、`quality`、`output_format` 等旧字段暂时保留为兼容占位；当前主生成流程不再把这些字段作为上游请求参数。
 
 `daily_usage` 以 `user_id + usage_date` 作为每日用量口径。只有 provider 成功返回可用图片后才递增 `generation_count`，provider 调用失败或返回空图片不递增成功用量。
 
