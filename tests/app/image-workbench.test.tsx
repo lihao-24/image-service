@@ -321,6 +321,24 @@ describe("ImageWorkbench chat canvas", () => {
     expect(within(sidebar).queryByLabelText("安全审核")).toBeNull();
   });
 
+  it("侧边栏 provider/model 下拉选中值在窄侧栏内可截断", async () => {
+    mockFetchByRoute();
+
+    renderWorkbench();
+    const sidebar = await screen.findByRole("complementary", { name: "工作台侧边栏" });
+    const providerSelect = within(sidebar).getByLabelText("供应商");
+    const modelSelect = within(sidebar).getByLabelText("模型");
+
+    expect(providerSelect.className).toContain("min-w-0");
+    expect(providerSelect.className).toContain("w-full");
+    expect(providerSelect.className).toContain("max-w-full");
+    expect(providerSelect.className).toContain("truncate");
+    expect(modelSelect.className).toContain("min-w-0");
+    expect(modelSelect.className).toContain("w-full");
+    expect(modelSelect.className).toContain("max-w-full");
+    expect(modelSelect.className).toContain("truncate");
+  });
+
   it("移动端侧边栏使用 drawer 语义，遮罩和关闭按钮可关闭", async () => {
     mockFetchByRoute();
     window.innerWidth = 375;

@@ -74,7 +74,7 @@ describe("getPublicImageConfig", () => {
         models: [
           {
             id: "gemini-3.1-flash-image-preview",
-            label: "Gemini 3.1 Flash Image Preview",
+            label: "Gemini 3.1 Flash",
             family: "gemini",
             supportsTextToImage: true,
             supportsImageToImage: true
@@ -109,6 +109,51 @@ describe("parseImageServiceConfig", () => {
       supportsTextToImage: true,
       supportsImageToImage: true
     });
+  });
+
+  it("旧 models 字符串配置中的 Gemini 模型也使用短展示名", () => {
+    const config = parseImageServiceConfig({
+      FASTCODE_API_KEY: "fastcode-key",
+      IMAGE_DEFAULT_PROVIDER: "fastcode-gemini",
+      IMAGE_DEFAULT_MODEL: "gemini-3.1-flash-image-preview",
+      IMAGE_PROVIDER_OPTIONS:
+        '[{"id":"fastcode-gemini","label":"FastCode Gemini","type":"gemini-generate-content","baseUrl":"https://timebackward.com/v1beta","apiKeyEnv":"FASTCODE_API_KEY","authStyle":"api-key-header","models":["gemini-3.1-flash-image-preview"]}]'
+    });
+
+    expect(config.providers[0].models[0]).toMatchObject({
+      id: "gemini-3.1-flash-image-preview",
+      label: "Gemini 3.1 Flash"
+    });
+  });
+
+  it("保留对象配置中的自定义模型展示名", () => {
+    const config = parseImageServiceConfig({
+      FASTCODE_API_KEY: "fastcode-key",
+      IMAGE_DEFAULT_PROVIDER: "fastcode-gemini",
+      IMAGE_DEFAULT_MODEL: "gemini-3.1-flash-image-preview",
+      IMAGE_PROVIDER_OPTIONS: JSON.stringify([
+        {
+          id: "fastcode-gemini",
+          label: "FastCode Gemini",
+          type: "gemini-generate-content",
+          baseUrl: "https://timebackward.com/v1beta",
+          apiKeyEnv: "FASTCODE_API_KEY",
+          authStyle: "api-key-header",
+          models: [
+            {
+              id: "gemini-3.1-flash-image-preview",
+              label: "My Gemini Alias",
+              family: "gemini",
+              enabled: true,
+              supportsTextToImage: true,
+              supportsImageToImage: true
+            }
+          ]
+        }
+      ])
+    });
+
+    expect(config.providers[0].models[0].label).toBe("My Gemini Alias");
   });
 
   it("从环境变量解析服务端 provider 配置，并要求默认值都存在于 allowlist", () => {
@@ -206,6 +251,7 @@ describe("parseImageServiceConfig", () => {
       models: [
         {
           id: "gemini-3.1-flash-image-preview",
+          label: "Gemini 3.1 Flash",
           family: "gemini",
           enabled: true,
           supportsTextToImage: true,

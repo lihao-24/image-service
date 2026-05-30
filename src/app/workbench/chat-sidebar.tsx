@@ -91,7 +91,7 @@ export function ChatSidebar({
             <span>供应商</span>
             <select
               aria-label="供应商"
-              className="min-h-10 rounded-lg border border-white/10 bg-slate-900 px-3 text-sm text-white focus:border-indigo-300 focus:outline-none"
+              className="min-h-10 min-w-0 w-full max-w-full truncate rounded-lg border border-white/10 bg-slate-900 px-3 text-sm text-white focus:border-indigo-300 focus:outline-none"
               onChange={(event) => onParamChange({ provider: event.target.value })}
               value={params.provider}
             >
@@ -107,7 +107,7 @@ export function ChatSidebar({
             <span>模型</span>
             <select
               aria-label="模型"
-              className="min-h-10 rounded-lg border border-white/10 bg-slate-900 px-3 text-sm text-white focus:border-indigo-300 focus:outline-none"
+              className="min-h-10 min-w-0 w-full max-w-full truncate rounded-lg border border-white/10 bg-slate-900 px-3 text-sm text-white focus:border-indigo-300 focus:outline-none"
               onChange={(event) => onParamChange({ model: event.target.value })}
               value={params.model}
             >

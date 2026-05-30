@@ -163,6 +163,10 @@ const DEFAULT_QUALITY_OPTIONS = "auto,high,medium,low";
 const DEFAULT_OUTPUT_FORMAT_OPTIONS = "png,jpeg,webp";
 const DEFAULT_BACKGROUND_OPTIONS = "auto,opaque";
 const DEFAULT_MODERATION_OPTIONS = "auto,low";
+const LEGACY_MODEL_LABEL_OVERRIDES: Record<string, string> = {
+  "gemini-3.1-flash-image-preview": "Gemini 3.1 Flash"
+};
+const LEGACY_MODEL_LABEL_VALUES = new Set(["Gemini 3.1 Flash Image Preview"]);
 
 export function parseImageServiceConfig(env: ImageConfigEnv = process.env): ImageServiceConfig {
   const providers = parseProviderOptions(
@@ -516,7 +520,7 @@ function normalizeProviderModelOption(rawModel: unknown, fieldName: string): Pro
 
     return {
       id,
-      label: id,
+      label: LEGACY_MODEL_LABEL_OVERRIDES[id] ?? id,
       family: "chatgpt",
       enabled: true,
       supportsTextToImage: true,
@@ -529,10 +533,12 @@ function normalizeProviderModelOption(rawModel: unknown, fieldName: string): Pro
   }
 
   const model = rawModel as Record<string, unknown>;
+  const id = readRequiredString(model.id, `${fieldName}.id`);
+  const label = readRequiredString(model.label, `${fieldName}.label`);
 
   return {
-    id: readRequiredString(model.id, `${fieldName}.id`),
-    label: readRequiredString(model.label, `${fieldName}.label`),
+    id,
+    label: LEGACY_MODEL_LABEL_VALUES.has(label) ? LEGACY_MODEL_LABEL_OVERRIDES[id] ?? label : label,
     family: readModelFamily(model.family, `${fieldName}.family`),
     enabled: readBoolean(model.enabled, true),
     supportsTextToImage: readBoolean(model.supportsTextToImage, false),
