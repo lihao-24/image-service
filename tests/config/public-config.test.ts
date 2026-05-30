@@ -32,11 +32,12 @@ describe("getPublicImageConfig", () => {
           ]
         },
         {
-          id: "fastcode",
-          label: "FastCode",
-          type: "openai-compatible-images",
-          baseUrl: "https://timebackward.com",
+          id: "fastcode-gemini",
+          label: "FastCode Gemini",
+          type: "gemini-generate-content",
+          baseUrl: "https://timebackward.com/v1beta",
           apiKeyEnv: "FASTCODE_API_KEY",
+          authStyle: "api-key-header",
           models: [
             {
               id: "gemini-3.1-flash-image-preview",
@@ -53,23 +54,39 @@ describe("getPublicImageConfig", () => {
 
     expect(config.defaultProviderId).toBe("toioto");
     expect(config.defaultModelId).toBe("gpt-image-2");
-    expect(config.providers[0]).toMatchObject({
-      id: "toioto",
-      label: "Toioto",
-      models: [
-        {
-          id: "gpt-image-2",
-          label: "GPT Image 2",
-          family: "chatgpt",
-          supportsTextToImage: true,
-          supportsImageToImage: true
-        }
-      ]
-    });
+    expect(config.providers).toMatchObject([
+      {
+        id: "toioto",
+        label: "Toioto",
+        models: [
+          {
+            id: "gpt-image-2",
+            label: "GPT Image 2",
+            family: "chatgpt",
+            supportsTextToImage: true,
+            supportsImageToImage: true
+          }
+        ]
+      },
+      {
+        id: "fastcode-gemini",
+        label: "FastCode Gemini",
+        models: [
+          {
+            id: "gemini-3.1-flash-image-preview",
+            label: "Gemini 3.1 Flash Image Preview",
+            family: "gemini",
+            supportsTextToImage: true,
+            supportsImageToImage: true
+          }
+        ]
+      }
+    ]);
     expect(JSON.stringify(config)).not.toContain("test-key");
     expect(JSON.stringify(config)).not.toContain("fastcode-key");
     expect(JSON.stringify(config)).not.toContain("apiKey");
     expect(JSON.stringify(config)).not.toContain("apiKeyEnv");
+    expect(JSON.stringify(config)).not.toContain("authStyle");
     expect(JSON.stringify(config)).not.toContain("baseUrl");
   });
 });
@@ -130,6 +147,71 @@ describe("parseImageServiceConfig", () => {
       baseUrl: "https://example.test/v1",
       apiKey: "test-key",
       apiKeyEnv: "SUB2API_API_KEY"
+    });
+  });
+
+  it("解析 FastCode Gemini 独立 generateContent provider 配置", () => {
+    const config = parseImageServiceConfig({
+      IMAGE_DEFAULT_PROVIDER: "fastcode-gemini",
+      IMAGE_DEFAULT_MODEL: "gemini-3.1-flash-image-preview",
+      IMAGE_PROVIDER_OPTIONS: JSON.stringify([
+        {
+          id: "fastcode",
+          label: "FastCode",
+          type: "openai-compatible-images",
+          baseUrl: "https://timebackward.com/v1",
+          apiKeyEnv: "FASTCODE_API_KEY",
+          models: [
+            {
+              id: "gpt-image-2-2k",
+              label: "GPT Image 2 2K",
+              family: "chatgpt",
+              enabled: true,
+              supportsTextToImage: true,
+              supportsImageToImage: true
+            }
+          ]
+        },
+        {
+          id: "fastcode-gemini",
+          label: "FastCode Gemini",
+          type: "gemini-generate-content",
+          baseUrl: "https://timebackward.com/v1beta",
+          apiKeyEnv: "FASTCODE_API_KEY",
+          authStyle: "api-key-header",
+          models: [
+            {
+              id: "gemini-3.1-flash-image-preview",
+              label: "Gemini 3.1 Flash Image Preview",
+              family: "gemini",
+              enabled: true,
+              supportsTextToImage: true,
+              supportsImageToImage: true
+            }
+          ]
+        }
+      ]),
+      FASTCODE_API_KEY: "fastcode-key"
+    });
+
+    expect(config.defaultProvider).toBe("fastcode-gemini");
+    expect(config.defaults.model).toBe("gemini-3.1-flash-image-preview");
+    expect(config.providers[1]).toMatchObject({
+      id: "fastcode-gemini",
+      type: "gemini-generate-content",
+      baseUrl: "https://timebackward.com/v1beta",
+      apiKey: "fastcode-key",
+      apiKeyEnv: "FASTCODE_API_KEY",
+      authStyle: "api-key-header",
+      models: [
+        {
+          id: "gemini-3.1-flash-image-preview",
+          family: "gemini",
+          enabled: true,
+          supportsTextToImage: true,
+          supportsImageToImage: true
+        }
+      ]
     });
   });
 

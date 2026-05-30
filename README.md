@@ -42,7 +42,7 @@ provider 持有连接信息和自己的 `models` 列表，model 持有 `id`、`l
 只返回 `defaultProvider`、`defaults` 和 provider/model 的公开字段，不包含
 `baseUrl`、`apiKeyEnv` 或 API key。
 
-当前 env 模板包含两个 provider：
+当前 env 模板包含三个 provider：
 
 - `toioto`：展示名 `Toioto`，`type` 为 `openai-compatible-images`，`baseUrl`
   为 `https://sub2api.toioto.org/v1`，`apiKeyEnv` 为 `SUB2API_API_KEY`，模型为
@@ -50,12 +50,14 @@ provider 持有连接信息和自己的 `models` 列表，model 持有 `id`、`l
 - `fastcode`：展示名 `FastCode`，`type` 为 `openai-compatible-images`，`baseUrl`
   为 `https://timebackward.com`，`apiKeyEnv` 为 `FASTCODE_API_KEY`。模板中保留
   `FASTCODE_API_KEY=""` 占位，真实值只写入本地或部署环境。
+- `fastcode-gemini`：展示名 `FastCode Gemini`，`type` 为
+  `gemini-generate-content`，`baseUrl` 为 `https://timebackward.com/v1beta`，
+  `authStyle` 为 `api-key-header`，同样使用 `FASTCODE_API_KEY`。当前模型为
+  `gemini-3.1-flash-image-preview`，支持文生图和参考图生图。
 
-Gemini adapter 已预留 `gemini-generate-content` 类型。FastCode 的 Gemini 图片模型
-需要先 smoke 确认第三方实际暴露的是 OpenAI-compatible Images API 形状，还是
-Gemini `generateContent` 形状；确认后再用正确的 provider `type`、`authStyle` 和模型
-配置加入 env。未确认前，env 模板不默认启用 Gemini 模型，也不要仅凭价格页或模型名假设
-Gemini 一定兼容 OpenAI Images API。
+FastCode 的 Gemini 图片模型已按 Gemini `generateContent` 形状接入：
+`POST /v1beta/models/{model}:generateContent`，认证头为 `x-goog-api-key`。不要把
+Gemini 模型配置到 `fastcode` 的 OpenAI-compatible Images provider 下。
 
 主生成流程只向上游发送 `provider`、`model`、`prompt`，参考图生图额外发送
 `image`。旧的 size、resolution、quality、output format、background 和
