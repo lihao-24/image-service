@@ -49,6 +49,34 @@ describe("createOpenAICompatibleImagesAdapter", () => {
     });
   });
 
+  it("OpenAI-compatible 文生图兼容返回图片 URL", async () => {
+    const fetchMock = vi.fn(async (input) => {
+      if (String(input).startsWith("https://cdn.example.test/generated.png")) {
+        return new Response(new Uint8Array([1, 2, 3]), {
+          status: 200,
+          headers: { "content-type": "image/png" }
+        });
+      }
+
+      return new Response(
+        JSON.stringify({ data: [{ url: "https://cdn.example.test/generated.png" }] }),
+        { status: 200, headers: { "content-type": "application/json" } }
+      );
+    });
+    const adapter = createOpenAICompatibleImagesAdapter({ fetch: fetchMock });
+
+    await expect(
+      adapter.generateImage(provider, {
+        model: "gpt-image-2",
+        prompt: "一只玻璃茶杯"
+      })
+    ).resolves.toMatchObject({
+      b64Json: Buffer.from(new Uint8Array([1, 2, 3])).toString("base64"),
+      mimeType: "image/png",
+      outputFormat: "png"
+    });
+  });
+
   it("Gemini generateContent 响应可归一化为 b64Json", async () => {
     const fetchMock = vi.fn(async () => new Response(
       JSON.stringify({

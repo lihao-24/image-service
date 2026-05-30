@@ -42,6 +42,7 @@ export type OpenAICompatibleImagesAdapterOptions = {
 type ImagesApiResponse = {
   data?: Array<{
     b64_json?: unknown;
+    url?: unknown;
   }>;
   error?: {
     code?: unknown;
@@ -94,13 +95,14 @@ export function createOpenAICompatibleImagesAdapter(
       });
 
       return {
-        b64Json: requireB64Json(json, 0, {
+        ...(await requireOpenAICompatibleImageResult(json, 0, {
           provider,
           endpoint,
           response,
           logger,
-          requestId
-        }),
+          requestId,
+          fetchClient
+        })),
         raw: json
       };
     },
@@ -127,13 +129,15 @@ export function createOpenAICompatibleImagesAdapter(
       });
 
       return {
-        b64Json: extractB64Json(json, 1) ?? requireB64Json(json, 0, {
+        ...(await readOpenAICompatibleImageResult(json, 1, fetchClient) ??
+          await requireOpenAICompatibleImageResult(json, 0, {
           provider,
           endpoint,
           response,
           logger,
-          requestId
-        }),
+          requestId,
+          fetchClient
+        })),
         raw: json
       };
     }
@@ -332,12 +336,16 @@ function normalizeProviderError(response: Response, json: ImagesApiResponse): Er
   return new Error("provider_request_failed");
 }
 
-function requireB64Json(
+async function requireOpenAICompatibleImageResult(
   apiResponse: ImagesApiResponse,
   index: number,
-  context: ProviderDiagnosticContext
-): string {
-  const image = extractB64Json(apiResponse, index);
+  context: ProviderDiagnosticContext & { fetchClient: typeof fetch }
+): Promise<Omit<ProviderImageResult, "raw">> {
+  const image = await readOpenAICompatibleImageResult(
+    apiResponse,
+    index,
+    context.fetchClient
+  );
 
   if (!image) {
     logInvalidProviderResponse(context, apiResponse);
@@ -345,6 +353,26 @@ function requireB64Json(
   }
 
   return image;
+}
+
+async function readOpenAICompatibleImageResult(
+  apiResponse: ImagesApiResponse,
+  index: number,
+  fetchClient: typeof fetch
+): Promise<Omit<ProviderImageResult, "raw"> | undefined> {
+  const b64Json = extractB64Json(apiResponse, index);
+
+  if (b64Json) {
+    return { b64Json };
+  }
+
+  const imageUrl = extractImageUrl(apiResponse, index);
+
+  if (!imageUrl) {
+    return undefined;
+  }
+
+  return fetchImageUrlAsBase64(imageUrl, fetchClient);
 }
 
 function extractB64Json(response: ImagesApiResponse, index: number): string | undefined {
@@ -355,6 +383,36 @@ function extractB64Json(response: ImagesApiResponse, index: number): string | un
   }
 
   return image;
+}
+
+function extractImageUrl(response: ImagesApiResponse, index: number): string | undefined {
+  const imageUrl = response.data?.[index]?.url;
+
+  if (typeof imageUrl !== "string" || imageUrl.length === 0) {
+    return undefined;
+  }
+
+  return imageUrl;
+}
+
+async function fetchImageUrlAsBase64(
+  imageUrl: string,
+  fetchClient: typeof fetch
+): Promise<Omit<ProviderImageResult, "raw">> {
+  const response = await fetchClient(imageUrl);
+
+  if (!response.ok) {
+    throw new Error("provider_response_invalid");
+  }
+
+  const contentType = response.headers.get("content-type") ?? undefined;
+  const bytes = Buffer.from(await response.arrayBuffer());
+
+  return {
+    b64Json: bytes.toString("base64"),
+    ...(contentType ? { mimeType: contentType } : {}),
+    ...(contentType?.includes("/") ? { outputFormat: contentType.split("/").pop() } : {})
+  };
 }
 
 type ProviderDiagnosticContext = {

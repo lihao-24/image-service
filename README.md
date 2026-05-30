@@ -48,7 +48,7 @@ provider 持有连接信息和自己的 `models` 列表，model 持有 `id`、`l
   为 `https://sub2api.toioto.org/v1`，`apiKeyEnv` 为 `SUB2API_API_KEY`，模型为
   `gpt-image-2`。
 - `fastcode`：展示名 `FastCode`，`type` 为 `openai-compatible-images`，`baseUrl`
-  为 `https://timebackward.com`，`apiKeyEnv` 为 `FASTCODE_API_KEY`。模板中保留
+  为 `https://timebackward.com/v1`，`apiKeyEnv` 为 `FASTCODE_API_KEY`。模板中保留
   `FASTCODE_API_KEY=""` 占位，真实值只写入本地或部署环境。
 - `fastcode-gemini`：展示名 `FastCode Gemini`，`type` 为
   `gemini-generate-content`，`baseUrl` 为 `https://timebackward.com/v1beta`，
