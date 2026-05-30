@@ -113,13 +113,6 @@ export async function POST(request: NextRequest | Request) {
         providerId: paramsResult.params.provider,
         model: paramsResult.params.model,
         mode: IMAGE_EDIT_MODE,
-        size: paramsResult.params.size,
-        resolution: paramsResult.params.resolution,
-        providerSize: "auto",
-        quality: paramsResult.params.quality,
-        outputFormat: paramsResult.params.outputFormat,
-        background: paramsResult.params.background,
-        moderation: paramsResult.params.moderation,
         hasReferenceImage: true,
         promptLength: formResult.body.prompt.length
       };

@@ -7,13 +7,6 @@ export type ImageRequestLogContext = {
   providerId: string;
   model: string;
   mode: string;
-  size: string;
-  resolution: string;
-  providerSize: string;
-  quality: string;
-  outputFormat: string;
-  background: string;
-  moderation: string;
   hasReferenceImage: boolean;
   promptLength: number;
 };

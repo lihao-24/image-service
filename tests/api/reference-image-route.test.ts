@@ -383,19 +383,22 @@ describe("POST /api/images/edits", () => {
         providerId: "toioto",
         model: "gpt-image-2",
         mode: "image-edit",
-        size: "auto",
-        resolution: "auto",
-        providerSize: "auto",
-        quality: "auto",
-        outputFormat: "auto",
-        background: "auto",
-        moderation: "auto",
         hasReferenceImage: true,
         promptLength: validFields.prompt.length,
         errorCode: "provider_request_failed",
         durationMs: expect.any(Number)
       })
     );
+    const failedLogContext = warnMock.mock.calls.find(
+      ([message]) => message === "[image-service] image request failed"
+    )?.[1];
+    expect(failedLogContext).not.toHaveProperty("size");
+    expect(failedLogContext).not.toHaveProperty("resolution");
+    expect(failedLogContext).not.toHaveProperty("providerSize");
+    expect(failedLogContext).not.toHaveProperty("quality");
+    expect(failedLogContext).not.toHaveProperty("outputFormat");
+    expect(failedLogContext).not.toHaveProperty("background");
+    expect(failedLogContext).not.toHaveProperty("moderation");
     expect(JSON.stringify(warnMock.mock.calls)).not.toContain(validFields.prompt);
     expect(JSON.stringify(warnMock.mock.calls)).not.toContain("reference-bytes");
     warnMock.mockRestore();
