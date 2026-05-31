@@ -117,7 +117,11 @@ describe("Prompt template library API", () => {
         id: recipe.id,
         source: "mine",
         title: "我的主图配置",
-        user_id: "user-a"
+        user_id: "user-a",
+        size: "2:3",
+        resolution: "standard",
+        background: "opaque",
+        moderation: "low"
       })
     ]);
     expect(body.favorite_template_ids).toEqual(["builtin-ecommerce-clean-packshot"]);
@@ -292,10 +296,15 @@ function dbRecipeInput(patch: Partial<Parameters<typeof createPromptRecipe>[2]> 
     mode: "text-to-image",
     provider: "sub2api",
     model: "gpt-image-2",
-    size: "1024x1536",
+    size: "2:3",
     quality: "high",
     outputFormat: "png",
-    params: { seed: 123 },
+    params: {
+      seed: 123,
+      resolution: "standard",
+      background: "opaque",
+      moderation: "low"
+    },
     referenceMode: "none",
     isFavorite: true,
     ...patch

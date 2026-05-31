@@ -3,27 +3,75 @@ import React from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import ImageWorkbench from "@/app/image-workbench";
+import { formatUsage, usagePercent } from "@/app/workbench/helpers";
 import type { PublicImageConfig } from "@/lib/config";
 
 const publicConfig: PublicImageConfig = {
-  defaultProvider: "sub2api",
+  defaultProviderId: "toioto",
+  defaultModelId: "gpt-image-2",
+  defaultProvider: "toioto",
   defaults: {
     model: "gpt-image-2",
-    size: "1024x1536",
-    quality: "high",
-    outputFormat: "png"
+    size: "auto",
+    resolution: "auto",
+    quality: "auto",
+    outputFormat: "png",
+    background: "auto",
+    moderation: "auto"
   },
   providers: [
     {
-      id: "sub2api",
-      label: "Sub2API",
-      models: ["gpt-image-2", "gpt-image-mini"]
+      id: "toioto",
+      label: "Toioto",
+      models: [
+        {
+          id: "gpt-image-2",
+          label: "GPT Image 2",
+          family: "chatgpt",
+          supportsTextToImage: true,
+          supportsImageToImage: true
+        }
+      ]
     }
   ],
   options: {
-    sizes: ["1024x1024", "1024x1536", "1536x1024"],
-    qualities: ["high", "medium"],
-    outputFormats: ["png", "webp"]
+    sizes: ["auto", "1:1", "3:2", "2:3", "16:9", "9:16"],
+    resolutions: ["auto", "standard", "hd", "4k"],
+    qualities: ["auto", "low", "medium", "high"],
+    outputFormats: ["png", "jpeg", "webp"],
+    backgrounds: ["auto", "opaque"],
+    moderations: ["auto", "low"]
+  }
+};
+
+const modeFallbackConfig: PublicImageConfig = {
+  ...publicConfig,
+  providers: [
+    {
+      id: "toioto",
+      label: "Toioto",
+      models: [
+        {
+          id: "text-only-model",
+          label: "Text Only",
+          family: "chatgpt",
+          supportsTextToImage: true,
+          supportsImageToImage: false
+        },
+        {
+          id: "edit-capable-model",
+          label: "Edit Capable",
+          family: "chatgpt",
+          supportsTextToImage: false,
+          supportsImageToImage: true
+        }
+      ]
+    }
+  ],
+  defaultModelId: "text-only-model",
+  defaults: {
+    ...publicConfig.defaults,
+    model: "text-only-model"
   }
 };
 
@@ -83,7 +131,7 @@ const infographicTemplate = {
   mode: "text-to-image",
   recommended: {
     model: "gpt-image-2",
-    size: "1536x1024",
+    size: "3:2",
     quality: "high",
     output_format: "png",
     reference_mode: "none"
@@ -108,6 +156,33 @@ const infographicTemplate = {
   is_favorite: true
 };
 
+const imageEditIdPhotoTemplate = {
+  source: "builtin",
+  id: "builtin-image-edit-id-photo",
+  title: "根据图片生成证件照",
+  category: "image-edit",
+  category_name: "图生图",
+  tags: ["图生图", "证件照", "人像"],
+  mode: "image-edit",
+  recommended: {
+    model: "gpt-image-2",
+    size: "1024x1536",
+    quality: "high",
+    output_format: "jpeg",
+    reference_mode: "single-image"
+  },
+  prompt: "基于上传人像照片生成一张标准证件照，保留人物身份特征，使用纯色背景。",
+  variables: [],
+  source_metadata: {
+    type: "original",
+    name: "Focal",
+    referenceUrl: "https://github.com/freestylefly/awesome-gpt-image-2",
+    note: "原创中文图生图模板。"
+  },
+  safety_notes: [],
+  is_favorite: false
+};
+
 const mineTemplate = {
   source: "mine",
   id: "recipe_1",
@@ -119,9 +194,12 @@ const mineTemplate = {
   mode: "text-to-image",
   provider: "sub2api",
   model: "gpt-image-2",
-  size: "1024x1536",
+  size: "2:3",
+  resolution: "standard",
   quality: "medium",
   output_format: "webp",
+  background: "opaque",
+  moderation: "low",
   prompt: "透明玻璃杯，产品摄影，浅色背景",
   negative_prompt: null,
   params: {},
@@ -133,6 +211,10 @@ const mineTemplate = {
 
 function renderWorkbench() {
   return render(<ImageWorkbench config={publicConfig} userLabel="hao@example.com" />);
+}
+
+function renderWorkbenchWithConfig(config: PublicImageConfig) {
+  return render(<ImageWorkbench config={config} userLabel="hao@example.com" />);
 }
 
 beforeEach(() => {
@@ -159,6 +241,20 @@ afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
+});
+
+describe("workbench usage helpers", () => {
+  it("格式化无限额和受限用量文案", () => {
+    expect(formatUsage({ generation_count: 12, limit: null, limited: false })).toBe(
+      "今日生成 12 次 · 不限额"
+    );
+    expect(formatUsage({ generation_count: 3, limit: 20, limited: true })).toBe(
+      "今日额度 3/20"
+    );
+    expect(formatUsage({ generation_count: 0, limit: null, limited: false })).toBe("");
+    expect(usagePercent("今日生成 12 次 · 不限额")).toBe(0);
+    expect(usagePercent("今日额度 3/20")).toBe(15);
+  });
 });
 
 describe("ImageWorkbench chat canvas", () => {
@@ -209,22 +305,38 @@ describe("ImageWorkbench chat canvas", () => {
     });
   });
 
-  it("侧边栏设置区默认只展示尺寸，展开后展示完整参数", async () => {
+  it("侧边栏只展示供应商和模型选择，不展示旧参数控件", async () => {
     mockFetchByRoute();
 
     renderWorkbench();
     const sidebar = await screen.findByRole("complementary", { name: "工作台侧边栏" });
 
-    expect(within(sidebar).getByLabelText("尺寸")).toBeTruthy();
-    expect(within(sidebar).queryByLabelText("Model")).toBeNull();
-    expect(within(sidebar).queryByLabelText("质量")).toBeNull();
+    expect(within(sidebar).getByLabelText("供应商")).toBeTruthy();
+    expect(within(sidebar).getByLabelText("模型")).toBeTruthy();
+    expect(within(sidebar).queryByLabelText("画面比例")).toBeNull();
+    expect(within(sidebar).queryByLabelText("分辨率")).toBeNull();
+    expect(within(sidebar).queryByLabelText("画质")).toBeNull();
     expect(within(sidebar).queryByLabelText("输出格式")).toBeNull();
+    expect(within(sidebar).queryByLabelText("背景")).toBeNull();
+    expect(within(sidebar).queryByLabelText("安全审核")).toBeNull();
+  });
 
-    fireEvent.click(within(sidebar).getByRole("button", { name: "展开设置" }));
+  it("侧边栏 provider/model 下拉选中值在窄侧栏内可截断", async () => {
+    mockFetchByRoute();
 
-    expect(within(sidebar).getByLabelText("Model")).toBeTruthy();
-    expect(within(sidebar).getByLabelText("质量")).toBeTruthy();
-    expect(within(sidebar).getByLabelText("输出格式")).toBeTruthy();
+    renderWorkbench();
+    const sidebar = await screen.findByRole("complementary", { name: "工作台侧边栏" });
+    const providerSelect = within(sidebar).getByLabelText("供应商");
+    const modelSelect = within(sidebar).getByLabelText("模型");
+
+    expect(providerSelect.className).toContain("min-w-0");
+    expect(providerSelect.className).toContain("w-full");
+    expect(providerSelect.className).toContain("max-w-full");
+    expect(providerSelect.className).toContain("truncate");
+    expect(modelSelect.className).toContain("min-w-0");
+    expect(modelSelect.className).toContain("w-full");
+    expect(modelSelect.className).toContain("max-w-full");
+    expect(modelSelect.className).toContain("truncate");
   });
 
   it("移动端侧边栏使用 drawer 语义，遮罩和关闭按钮可关闭", async () => {
@@ -253,6 +365,7 @@ describe("ImageWorkbench chat canvas", () => {
     renderWorkbench();
 
     expect(await screen.findByText("今天想生成什么？")).toBeTruthy();
+    expect(screen.queryByText("Focal workspace")).toBeNull();
     const promptInput = screen.getByLabelText("Prompt") as HTMLTextAreaElement;
     fireEvent.change(promptInput, { target: { value: "一只透明玻璃杯，柔和自然光" } });
     fireEvent.click(screen.getByRole("button", { name: "生成图片" }));
@@ -260,6 +373,7 @@ describe("ImageWorkbench chat canvas", () => {
     expect(screen.queryByText("今天想生成什么？")).toBeNull();
     expect(screen.getByText("一只透明玻璃杯，柔和自然光")).toBeTruthy();
     expect(screen.getByText("AI 正在生成图片...")).toBeTruthy();
+    expect(screen.getByLabelText("图片生成占位状态")).toBeTruthy();
     expect(promptInput.value).toBe("");
 
     deferred.resolve(successGenerationResponse());
@@ -267,6 +381,30 @@ describe("ImageWorkbench chat canvas", () => {
   });
 
   it("文生图成功后 loading 替换为 AI 图片消息", async () => {
+    const fetchMock = mockFetchByRoute();
+
+    renderWorkbench();
+    fireEvent.change(screen.getByLabelText("Prompt"), {
+      target: { value: "生成白底商品主图" }
+    });
+    fireEvent.click(screen.getByRole("button", { name: "生成图片" }));
+
+    const image = await screen.findByRole("img", { name: "AI 生成图片" });
+    expect(image.getAttribute("src")).toBe(`data:image/png;base64,${tinyPng}`);
+    expect(screen.queryByText("AI 正在生成图片...")).toBeNull();
+    expect(screen.getByRole("button", { name: "保存配置" })).toBeTruthy();
+    expect(generationCalls(fetchMock)[0][1]?.method).toBe("POST");
+    expect(generationCalls(fetchMock)[0][1]?.headers).toEqual({
+      "Content-Type": "application/json"
+    });
+    expect(JSON.parse(String(generationCalls(fetchMock)[0][1]?.body))).toEqual({
+      provider: "toioto",
+      model: "gpt-image-2",
+      prompt: "生成白底商品主图"
+    });
+  });
+
+  it("点击聊天图片后打开大图预览并可关闭", async () => {
     mockFetchByRoute();
 
     renderWorkbench();
@@ -276,9 +414,15 @@ describe("ImageWorkbench chat canvas", () => {
     fireEvent.click(screen.getByRole("button", { name: "生成图片" }));
 
     const image = await screen.findByRole("img", { name: "AI 生成图片" });
-    expect(image.getAttribute("src")).toBe(`data:image/png;base64,${tinyPng}`);
-    expect(screen.queryByText("AI 正在生成图片...")).toBeNull();
-    expect(screen.getByRole("button", { name: "保存配置" })).toBeTruthy();
+    fireEvent.click(image);
+
+    const preview = screen.getByRole("dialog", { name: "图片预览" });
+    expect(
+      within(preview).getByRole("img", { name: "AI 生成图片预览" }).getAttribute("src")
+    ).toBe(`data:image/png;base64,${tinyPng}`);
+
+    fireEvent.click(within(preview).getByRole("button", { name: "关闭预览" }));
+    expect(screen.queryByRole("dialog", { name: "图片预览" })).toBeNull();
   });
 
   it("生成失败后显示脱敏错误卡片", async () => {
@@ -302,19 +446,38 @@ describe("ImageWorkbench chat canvas", () => {
 
     expect(await screen.findByText("图片生成服务暂时不可用，请稍后再试。")).toBeTruthy();
     expect(screen.getByText("请调整 prompt 或稍后重试。")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "编辑失败请求" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "复制失败请求 Prompt" })).toBeTruthy();
     expect(screen.queryByText(/sub2api\.toioto/)).toBeNull();
     expect(screen.queryByText(/sk-secret/)).toBeNull();
     expect(screen.queryByText(/stack trace/)).toBeNull();
   });
 
-  it("用户消息编辑回填 prompt 和参数", async () => {
+  it("失败消息可回填 prompt，便于调整后重试", async () => {
+    mockFetchByRoute({
+      generationResponse: Promise.resolve(
+        jsonResponse({ error: "provider_request_failed", message: "provider failed" }, 502)
+      )
+    });
+
+    renderWorkbench();
+    fireEvent.change(screen.getByLabelText("Prompt"), {
+      target: { value: "一张安静的书桌" }
+    });
+    fireEvent.click(screen.getByRole("button", { name: "生成图片" }));
+
+    await screen.findByText("图片生成服务暂时不可用，请稍后再试。");
+    fireEvent.click(screen.getByRole("button", { name: "编辑失败请求" }));
+
+    expect((screen.getByLabelText("Prompt") as HTMLTextAreaElement).value).toBe(
+      "一张安静的书桌"
+    );
+  });
+
+  it("用户消息编辑回填 prompt 和供应商模型", async () => {
     mockFetchByRoute();
 
     renderWorkbench();
-    fireEvent.click(await screen.findByRole("button", { name: "展开设置" }));
-    fireEvent.change(screen.getByLabelText("尺寸"), { target: { value: "1536x1024" } });
-    fireEvent.change(screen.getByLabelText("质量"), { target: { value: "medium" } });
-    fireEvent.change(screen.getByLabelText("输出格式"), { target: { value: "webp" } });
     fireEvent.change(screen.getByLabelText("Prompt"), {
       target: { value: "横版社媒封面，蓝色玻璃质感" }
     });
@@ -327,9 +490,8 @@ describe("ImageWorkbench chat canvas", () => {
     expect((screen.getByLabelText("Prompt") as HTMLTextAreaElement).value).toBe(
       "横版社媒封面，蓝色玻璃质感"
     );
-    expect((screen.getByLabelText("尺寸") as HTMLSelectElement).value).toBe("1536x1024");
-    expect((screen.getByLabelText("质量") as HTMLSelectElement).value).toBe("medium");
-    expect((screen.getByLabelText("输出格式") as HTMLSelectElement).value).toBe("webp");
+    expect((screen.getByLabelText("供应商") as HTMLSelectElement).value).toBe("toioto");
+    expect((screen.getByLabelText("模型") as HTMLSelectElement).value).toBe("gpt-image-2");
   });
 
   it("图生图消息编辑提示重新选择参考图，不回填 File", async () => {
@@ -359,6 +521,30 @@ describe("ImageWorkbench chat canvas", () => {
     expect((screen.getByLabelText("参考图文件") as HTMLInputElement).files?.length ?? 0).toBe(0);
   });
 
+  it("初始拉取今日用量并可打开用量弹窗", async () => {
+    mockFetchByRoute({
+      usageResponse: {
+        usage: {
+          date: "2026-05-19",
+          generation_count: 2,
+          limit: null,
+          limited: false
+        }
+      }
+    });
+
+    renderWorkbench();
+
+    expect(await screen.findByText("今日生成 2 次 · 不限额")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "查看今日用量" }));
+
+    expect(screen.getByRole("dialog", { name: "今日用量" })).toBeTruthy();
+    expect(screen.getByText("GPT Image 系列当前仅统计用量，不做每日额度拦截。")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "关闭" }));
+    expect(screen.queryByRole("dialog", { name: "今日用量" })).toBeNull();
+  });
+
   it("模板分类入口打开 Modal，使用模板写入输入框且不调用生成 API", async () => {
     const fetchMock = mockFetchByRoute();
 
@@ -383,6 +569,114 @@ describe("ImageWorkbench chat canvas", () => {
     );
     expect(fetchMock.mock.calls.some(([url]) => url === "/api/images/generations")).toBe(false);
     expect(fetchMock.mock.calls.some(([url]) => url === "/api/images/edits")).toBe(false);
+
+    fireEvent.click(screen.getByRole("button", { name: "生成图片" }));
+    await screen.findByRole("img", { name: "AI 生成图片" });
+    const body = JSON.parse(String(generationCalls(fetchMock)[0][1]?.body));
+    expect(body).toEqual({
+      provider: "toioto",
+      model: "gpt-image-2",
+      prompt: "为「透明玻璃杯」生成一张电商主图，突出「耐热玻璃」，纯净浅色背景，商品居中，柔和棚拍光。"
+    });
+  });
+
+  it("主页和侧边栏图生图入口打开带模板内容的 Modal", async () => {
+    mockFetchByRoute();
+
+    renderWorkbench();
+    const quickActions = await screen.findAllByRole("button", { name: "图生图" });
+    fireEvent.click(quickActions[0]);
+
+    const modal = await screen.findByRole("dialog", { name: "图生图模板" });
+    expect(within(modal).getByRole("button", { name: "根据图片生成证件照" })).toBeTruthy();
+    fireEvent.click(within(modal).getByRole("button", { name: "关闭" }));
+
+    const sidebar = await screen.findByRole("complementary", { name: "工作台侧边栏" });
+    expect(within(sidebar).getByRole("button", { name: "打开模板分类 图生图" })).toBeTruthy();
+
+    fireEvent.click(within(sidebar).getByRole("button", { name: "打开模板分类 图生图" }));
+    const sidebarModal = await screen.findByRole("dialog", { name: "图生图模板" });
+    expect(within(sidebarModal).getByRole("button", { name: "根据图片生成证件照" })).toBeTruthy();
+  });
+
+  it("应用图生图模板时 provider/model 不可用会按目标模式回退模型", async () => {
+    const fetchMock = mockFetchByRoute({
+      initialLibrary: createTemplateLibraryResponse({
+        mine: [
+          {
+            ...mineTemplate,
+            id: "recipe_edit_unsupported",
+            title: "旧图生图配置",
+            mode: "image-edit",
+            provider: "missing-provider",
+            model: "missing-model",
+            reference_mode: "single-image"
+          }
+        ]
+      })
+    });
+
+    renderWorkbenchWithConfig(modeFallbackConfig);
+    const sidebar = await screen.findByRole("complementary", { name: "工作台侧边栏" });
+    expect((within(sidebar).getByLabelText("模型") as HTMLSelectElement).value).toBe(
+      "text-only-model"
+    );
+
+    fireEvent.click(within(sidebar).getByRole("button", { name: "我的" }));
+    fireEvent.click(within(sidebar).getByRole("button", { name: "打开我的模板 旧图生图配置" }));
+    const modal = await screen.findByRole("dialog", { name: "我的模板" });
+    fireEvent.click(within(modal).getByRole("button", { name: "旧图生图配置" }));
+    fireEvent.click(within(modal).getByRole("button", { name: "使用模板" }));
+
+    expect((screen.getByLabelText("模型") as HTMLSelectElement).value).toBe("edit-capable-model");
+    fireEvent.change(screen.getByLabelText("参考图文件"), {
+      target: {
+        files: [new File(["image"], "reference.png", { type: "image/png" })]
+      }
+    });
+    fireEvent.click(screen.getByRole("button", { name: "生成图片" }));
+    await screen.findByRole("img", { name: "AI 生成图片" });
+
+    const editBody = fetchMock.mock.calls.find(([url]) => url === "/api/images/edits")?.[1]
+      ?.body as FormData;
+    expect(editBody.get("provider")).toBe("toioto");
+    expect(editBody.get("model")).toBe("edit-capable-model");
+    expect(editBody.get("prompt")).toBe("透明玻璃杯，产品摄影，浅色背景");
+    expect(editBody.get("image")).toBeInstanceOf(File);
+    expect(Array.from(editBody.keys()).sort()).toEqual(["image", "model", "prompt", "provider"]);
+  });
+
+  it("切换到图生图时自动选择支持图生图的模型并提交", async () => {
+    const fetchMock = mockFetchByRoute();
+
+    renderWorkbenchWithConfig(modeFallbackConfig);
+    expect((screen.getByLabelText("模型") as HTMLSelectElement).value).toBe("text-only-model");
+
+    fireEvent.click(screen.getAllByRole("button", { name: "图生图" }).at(-1)!);
+
+    const modelSelect = screen.getByLabelText("模型") as HTMLSelectElement;
+    expect(modelSelect.value).toBe("edit-capable-model");
+    expect(Array.from(modelSelect.options).map((option) => option.value)).toEqual([
+      "edit-capable-model"
+    ]);
+
+    fireEvent.change(screen.getByLabelText("参考图文件"), {
+      target: {
+        files: [new File(["image"], "reference.png", { type: "image/png" })]
+      }
+    });
+    fireEvent.change(screen.getByLabelText("Prompt"), {
+      target: { value: "保留构图改成清晨光线" }
+    });
+    fireEvent.click(screen.getByRole("button", { name: "生成图片" }));
+
+    await screen.findByRole("img", { name: "AI 生成图片" });
+    const editBody = fetchMock.mock.calls.find(([url]) => url === "/api/images/edits")?.[1]
+      ?.body as FormData;
+    expect(editBody.get("provider")).toBe("toioto");
+    expect(editBody.get("model")).toBe("edit-capable-model");
+    expect(editBody.get("prompt")).toBe("保留构图改成清晨光线");
+    expect(editBody.get("image")).toBeInstanceOf(File);
   });
 
   it("移动端模板 Modal 使用整窗滚动避免内容被裁切", async () => {
@@ -471,15 +765,14 @@ describe("ImageWorkbench chat canvas", () => {
     const scrollContainer = templateRegion.querySelector("[data-template-scroll]");
     const defaultButton = within(templateRegion).getByRole("button", { name: "默认" });
     const categoryButton = within(templateRegion).getByRole("button", { name: "打开模板分类 电商产品" });
-    const settingsToggle = within(sidebar).getByRole("button", { name: "展开设置" });
 
     expect(templateRegion.className).toContain("min-h-[220px]");
     expect(templateRegion.className).toContain("overflow-hidden");
     expect(scrollContainer?.className).toContain("flex-1");
     expect(scrollContainer?.className).toContain("overflow-y-auto");
+    expect(scrollContainer?.className).toContain("template-scrollbar");
     expect(defaultButton.className).toContain("min-h-9");
     expect(categoryButton.className).toContain("min-h-10");
-    expect(settingsToggle.className).toContain("min-h-9");
   });
 
   it("我的模板列表为空时显示简短空状态", async () => {
@@ -494,13 +787,10 @@ describe("ImageWorkbench chat canvas", () => {
     expect(within(sidebar).getByText("暂无我的模板")).toBeTruthy();
   });
 
-  it("AI 图片消息重新生成使用消息关联 prompt 和参数调用生成 API", async () => {
+  it("AI 图片消息重新生成使用消息关联 prompt 和供应商模型调用生成 API", async () => {
     const fetchMock = mockFetchByRoute();
 
     renderWorkbench();
-    fireEvent.click(await screen.findByRole("button", { name: "展开设置" }));
-    fireEvent.change(screen.getByLabelText("尺寸"), { target: { value: "1536x1024" } });
-    fireEvent.change(screen.getByLabelText("质量"), { target: { value: "medium" } });
     fireEvent.change(screen.getByLabelText("Prompt"), {
       target: { value: "横版社媒封面，蓝色玻璃质感" }
     });
@@ -516,11 +806,127 @@ describe("ImageWorkbench chat canvas", () => {
     });
 
     const body = JSON.parse(String(generationCalls(fetchMock)[1][1]?.body));
-    expect(body).toMatchObject({
+    expect(body).toEqual({
+      provider: "toioto",
+      model: "gpt-image-2",
       prompt: "横版社媒封面，蓝色玻璃质感",
-      size: "1536x1024",
-      quality: "medium"
     });
+  });
+
+  it("从文生图状态编辑图生图历史消息会保留图生图模型", async () => {
+    const fetchMock = mockFetchByRoute();
+
+    renderWorkbenchWithConfig(modeFallbackConfig);
+    fireEvent.click(screen.getAllByRole("button", { name: "图生图" }).at(-1)!);
+    fireEvent.change(screen.getByLabelText("参考图文件"), {
+      target: {
+        files: [new File(["image"], "reference.png", { type: "image/png" })]
+      }
+    });
+    fireEvent.change(screen.getByLabelText("Prompt"), {
+      target: { value: "保留构图改成清晨光线" }
+    });
+    fireEvent.click(screen.getByRole("button", { name: "生成图片" }));
+    await screen.findByRole("img", { name: "AI 生成图片" });
+
+    fireEvent.click(screen.getByRole("button", { name: "文生图" }));
+    expect((screen.getByLabelText("模型") as HTMLSelectElement).value).toBe("text-only-model");
+    fireEvent.click(screen.getByRole("button", { name: "编辑用户消息" }));
+
+    expect((screen.getByLabelText("模型") as HTMLSelectElement).value).toBe("edit-capable-model");
+    expect(await screen.findByText("参考图需要重新选择。")).toBeTruthy();
+    fireEvent.change(screen.getByLabelText("参考图文件"), {
+      target: {
+        files: [new File(["image-2"], "reference-2.png", { type: "image/png" })]
+      }
+    });
+    fireEvent.click(screen.getByRole("button", { name: "生成图片" }));
+
+    await waitFor(() => {
+      expect(fetchMock.mock.calls.filter(([url]) => url === "/api/images/edits").length).toBe(2);
+    });
+    const editBodies = fetchMock.mock.calls
+      .filter(([url]) => url === "/api/images/edits")
+      .map(([, init]) => init?.body as FormData);
+    expect(editBodies[1].get("provider")).toBe("toioto");
+    expect(editBodies[1].get("model")).toBe("edit-capable-model");
+    expect(editBodies[1].get("prompt")).toBe("保留构图改成清晨光线");
+    expect(editBodies[1].get("image")).toBeInstanceOf(File);
+  });
+
+  it("图生图提交前压缩参考图但预览仍使用原始文件 URL", async () => {
+    const fetchMock = mockFetchByRoute();
+    const originalCreateElement = document.createElement.bind(document);
+    const drawImage = vi.fn();
+    const close = vi.fn();
+    vi.stubGlobal(
+      "createImageBitmap",
+      vi.fn(async () => ({
+        width: 4096,
+        height: 2048,
+        close
+      }))
+    );
+    vi.spyOn(document, "createElement").mockImplementation((tagName: string) => {
+      if (tagName === "canvas") {
+        return {
+          width: 0,
+          height: 0,
+          getContext: () => ({ drawImage }),
+          toBlob: (callback: BlobCallback) =>
+            callback(new Blob(["compressed-reference"], { type: "image/jpeg" }))
+        } as unknown as HTMLCanvasElement;
+      }
+
+      return originalCreateElement(tagName);
+    });
+
+    renderWorkbench();
+    fireEvent.click(screen.getAllByRole("button", { name: "图生图" }).at(-1)!);
+    const originalFile = new File([new Uint8Array(5 * 1024 * 1024)], "reference.png", {
+      type: "image/png"
+    });
+    fireEvent.change(screen.getByLabelText("参考图文件"), {
+      target: { files: [originalFile] }
+    });
+    fireEvent.change(screen.getByLabelText("Prompt"), {
+      target: { value: "保留构图，改成清晨窗边光线" }
+    });
+    fireEvent.click(screen.getByRole("button", { name: "生成图片" }));
+
+    await screen.findByRole("img", { name: "AI 生成图片" });
+    const editBody = fetchMock.mock.calls.find(([url]) => url === "/api/images/edits")?.[1]
+      ?.body as FormData;
+    const uploadedFile = editBody.get("image") as File;
+
+    expect(createImageBitmap).toHaveBeenCalledWith(originalFile);
+    expect(drawImage).toHaveBeenCalled();
+    expect(close).toHaveBeenCalled();
+    expect(uploadedFile).toBeInstanceOf(File);
+    expect(uploadedFile.name).toBe("reference.jpg");
+    expect(uploadedFile.type).toBe("image/jpeg");
+    expect(uploadedFile).not.toBe(originalFile);
+    expect(screen.getByRole("img", { name: "参考图缩略图" }).getAttribute("src")).toBe(
+      "blob:reference-preview"
+    );
+  });
+
+  it("参考图长文件名会被截断且保留完整 title", async () => {
+    mockFetchByRoute();
+
+    renderWorkbench();
+    fireEvent.click(screen.getAllByRole("button", { name: "图生图" }).at(-1)!);
+    const fileName =
+      "this-is-a-very-long-reference-image-name-used-to-verify-mobile-truncation.png";
+    fireEvent.change(screen.getByLabelText("参考图文件"), {
+      target: {
+        files: [new File(["image"], fileName, { type: "image/png" })]
+      }
+    });
+
+    const fileChip = screen.getByTitle(fileName);
+    expect(fileChip.className).toContain("truncate");
+    expect(fileChip.textContent).toContain(fileName);
   });
 
   it("AI 图片消息保存配置打开 Modal，recipe 请求不包含图片、base64 或参考图", async () => {
@@ -550,19 +956,47 @@ describe("ImageWorkbench chat canvas", () => {
       title: "玻璃杯配置",
       prompt: "透明玻璃杯，产品摄影",
       mode: "text-to-image",
-      provider: "sub2api",
+      provider: "toioto",
       model: "gpt-image-2",
-      size: "1024x1536",
-      quality: "high",
-      output_format: "png",
       reference_mode: null
     });
+    expect(body).not.toHaveProperty("size");
+    expect(body).not.toHaveProperty("resolution");
+    expect(body).not.toHaveProperty("quality");
+    expect(body).not.toHaveProperty("output_format");
+    expect(body).not.toHaveProperty("background");
+    expect(body).not.toHaveProperty("moderation");
     expect(body).not.toHaveProperty("image");
     expect(body).not.toHaveProperty("b64_json");
     expect(body).not.toHaveProperty("base64");
     expect(body).not.toHaveProperty("thumbnail");
     expect(body).not.toHaveProperty("referenceImage");
     expect(body).not.toHaveProperty("reference_preview");
+  });
+
+  it("保存配置时保存按钮展示禁用加载态", async () => {
+    const deferred = createDeferred<Response>();
+    mockFetchByRoute({
+      recipeResponse: deferred.promise,
+      afterSaveLibrary: createTemplateLibraryResponse({ mine: [mineTemplate] })
+    });
+
+    renderWorkbench();
+    fireEvent.change(screen.getByLabelText("Prompt"), {
+      target: { value: "透明玻璃杯，产品摄影" }
+    });
+    fireEvent.click(screen.getByRole("button", { name: "生成图片" }));
+    await screen.findByRole("img", { name: "AI 生成图片" });
+    fireEvent.click(screen.getByRole("button", { name: "保存配置" }));
+
+    const modal = await screen.findByRole("dialog", { name: "保存配置" });
+    fireEvent.click(within(modal).getByRole("button", { name: "保存" }));
+
+    const savingButton = within(modal).getByRole("button", { name: "保存中..." });
+    expect(savingButton).toHaveProperty("disabled", true);
+
+    deferred.resolve(jsonResponse({ recipe: { id: "recipe_saved", title: "玻璃杯配置" } }));
+    await screen.findByText("配置已保存。");
   });
 
   it("页面不渲染 provider baseUrl、apiKeyEnv 或 API key", async () => {
@@ -581,8 +1015,10 @@ describe("ImageWorkbench chat canvas", () => {
 type MockFetchOptions = {
   initialLibrary?: unknown;
   afterSaveLibrary?: unknown;
+  usageResponse?: unknown;
   generationResponse?: Promise<Response>;
   editResponse?: Promise<Response>;
+  recipeResponse?: Promise<Response>;
 };
 
 function mockFetchByRoute(options: MockFetchOptions = {}) {
@@ -608,6 +1044,16 @@ function mockFetchByRoute(options: MockFetchOptions = {}) {
       return Promise.resolve(jsonResponse(libraryCalls === 1 ? initialLibrary : afterSaveLibrary));
     }
 
+    if (url === "/api/usage") {
+      return Promise.resolve(
+        jsonResponse(
+          options.usageResponse ?? {
+            usage: { date: "2026-05-19", generation_count: 0, limit: null, limited: false }
+          }
+        )
+      );
+    }
+
     if (url === "/api/images/generations") {
       return options.generationResponse ?? Promise.resolve(successGenerationResponse());
     }
@@ -618,17 +1064,20 @@ function mockFetchByRoute(options: MockFetchOptions = {}) {
         Promise.resolve(
           jsonResponse({
             image: { b64_json: tinyPng, output_format: "webp" },
-            meta: { daily_usage: { generation_count: 1, limit: 20 } }
+            meta: { daily_usage: { generation_count: 1, limit: null, limited: false } }
           })
         )
       );
     }
 
     if (url === "/api/recipes") {
-      return Promise.resolve(
-        jsonResponse({
-          recipe: { id: "recipe_saved", title: "玻璃杯配置" }
-        })
+      return (
+        options.recipeResponse ??
+        Promise.resolve(
+          jsonResponse({
+            recipe: { id: "recipe_saved", title: "玻璃杯配置" }
+          })
+        )
       );
     }
 
@@ -649,10 +1098,11 @@ function createTemplateLibraryResponse(
     categories: overrides.categories ?? [
       { id: "ecommerce-product", name: "电商产品", description: "商品主图" },
       { id: "ui-interface", name: "UI与界面", description: "应用界面和社媒截图" },
+      { id: "image-edit", name: "图生图", description: "参考图转换和人像改造" },
       { id: "infographic", name: "信息图表", description: "知识卡片" }
     ],
     templates: {
-      builtin: [ecommerceTemplate, infographicTemplate],
+      builtin: [ecommerceTemplate, infographicTemplate, imageEditIdPhotoTemplate],
       mine: overrides.mine ?? []
     },
     favorite_template_ids: [infographicTemplate.id]
@@ -662,7 +1112,7 @@ function createTemplateLibraryResponse(
 function successGenerationResponse(): Response {
   return jsonResponse({
     image: { b64_json: tinyPng, output_format: "png" },
-    meta: { daily_usage: { generation_count: 1, limit: 20 } }
+    meta: { daily_usage: { generation_count: 1, limit: null, limited: false } }
   });
 }
 

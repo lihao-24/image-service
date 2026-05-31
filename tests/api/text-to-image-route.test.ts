@@ -17,7 +17,7 @@ vi.mock("@/lib/providers", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/providers")>();
   return {
     ...actual,
-    createOpenAICompatibleImagesAdapter: vi.fn()
+    createImagesAdapterForProvider: vi.fn()
   };
 });
 
@@ -32,7 +32,7 @@ vi.mock("@/lib/usage", async (importOriginal) => {
 const { createServerSupabaseClient } = await import("@/lib/auth/server");
 const { openDatabase } = await import("@/lib/db");
 const { getDailyUsage, listGenerationLogs, listPromptRecipes } = await import("@/lib/db");
-const { createOpenAICompatibleImagesAdapter } = await import("@/lib/providers");
+const { createImagesAdapterForProvider } = await import("@/lib/providers");
 const { checkDailyQuota, getUsageDate } = await import("@/lib/usage");
 const { POST } = await import("@/app/api/images/generations/route");
 const actualDb = await vi.importActual<typeof import("@/lib/db")>("@/lib/db");
@@ -40,7 +40,7 @@ const actualUsage = await vi.importActual<typeof import("@/lib/usage")>("@/lib/u
 
 const mockCreateServerSupabaseClient = createServerSupabaseClient as Mock;
 const mockOpenDatabase = openDatabase as Mock;
-const mockCreateAdapter = createOpenAICompatibleImagesAdapter as Mock;
+const mockCreateAdapter = createImagesAdapterForProvider as Mock;
 const mockCheckDailyQuota = checkDailyQuota as Mock;
 let currentDb: import("@/lib/db").ImageDatabase;
 
@@ -64,10 +64,11 @@ function mockUser(userId = "user-w07") {
 }
 
 const validBody = {
-  provider: "sub2api",
+  provider: "toioto",
   model: "gpt-image-2",
   prompt: "一只玻璃茶杯放在木桌上",
-  size: "1024x1536",
+  size: "2:3",
+  resolution: "standard",
   quality: "high",
   output_format: "png"
 };
@@ -107,7 +108,7 @@ describe("POST /api/images/generations", () => {
     const response = await POST(
       createRequest({
         ...validBody,
-        size: "2048x2048"
+        provider: "missing"
       })
     );
     const body = await response.json();
@@ -118,22 +119,55 @@ describe("POST /api/images/generations", () => {
     expect(mockOpenDatabase).not.toHaveBeenCalled();
   });
 
-  it("额度用尽返回 quota_exceeded，写拒绝日志且不调用 provider", async () => {
+  it("最小文生图请求只把 model 和 prompt 传给 adapter", async () => {
+    mockUser();
+    const generateImage = vi.fn(async () => ({
+      b64Json: "base64-image",
+      raw: { data: [{ b64_json: "base64-image" }] }
+    }));
+    mockCreateAdapter.mockReturnValue({ generateImage });
+
+    const response = await POST(
+      createRequest({
+        provider: "toioto",
+        model: "gpt-image-2",
+        prompt: "生成白底商品主图"
+      })
+    );
+
+    expect(response.status).toBe(200);
+    expect(generateImage).toHaveBeenCalledWith(expect.anything(), {
+      model: "gpt-image-2",
+      prompt: "生成白底商品主图"
+    });
+  });
+
+  it("gpt-image-2 不受每日额度拦截，但成功后仍统计用量", async () => {
     mockUser();
     process.env.IMAGE_DAILY_LIMIT = "0";
+    const generateImage = vi.fn(async () => ({
+      b64Json: "base64-image",
+      raw: { data: [{ b64_json: "base64-image" }] }
+    }));
+    mockCreateAdapter.mockReturnValue({ generateImage });
 
     const response = await POST(createRequest(validBody));
     const body = await response.json();
 
-    expect(response.status).toBe(429);
-    expect(body.error).toBe("quota_exceeded");
-    expect(mockCreateAdapter).not.toHaveBeenCalled();
-    expect(getDailyUsage(currentDb, "user-w07", getUsageDate())).toBe(0);
+    expect(response.status).toBe(200);
+    expect(mockCheckDailyQuota).not.toHaveBeenCalled();
+    expect(generateImage).toHaveBeenCalledTimes(1);
+    expect(body.meta.daily_usage).toEqual({
+      generation_count: 1,
+      limit: null,
+      limited: false
+    });
+    expect(getDailyUsage(currentDb, "user-w07", getUsageDate())).toBe(1);
     const logs = listGenerationLogs(currentDb, "user-w07");
     expect(logs).toHaveLength(1);
     expect(logs[0]).toMatchObject({
-      status: "rejected",
-      errorCode: "quota_exceeded",
+      status: "success",
+      errorCode: null,
       promptLength: validBody.prompt.length,
       hasReferenceImage: false
     });
@@ -159,37 +193,39 @@ describe("POST /api/images/generations", () => {
     const body = await response.json();
 
     expect(response.status).toBe(200);
-    expect(events).toEqual(["quota", "provider"]);
+    expect(events).toEqual(["provider"]);
+    expect(mockCheckDailyQuota).not.toHaveBeenCalled();
     expect(generateImage).toHaveBeenCalledTimes(1);
     expect(generateImage).toHaveBeenCalledWith(
       expect.objectContaining({
-        id: "sub2api",
+        id: "toioto",
         baseUrl: "https://sub2api.toioto.org/v1",
         apiKey: "test-key"
       }),
       {
         model: "gpt-image-2",
-        prompt: validBody.prompt,
-        size: "1024x1536",
-        quality: "high",
-        outputFormat: "png"
+        prompt: validBody.prompt
       }
     );
     expect(body).toEqual({
       image: {
         b64_json: "base64-image",
-        output_format: "png"
+        output_format: "auto"
       },
       meta: {
-        provider: "sub2api",
+        provider: "toioto",
         model: "gpt-image-2",
-        size: "1024x1536",
-        quality: "high",
-        output_format: "png",
+        size: "auto",
+        resolution: "auto",
+        quality: "auto",
+        output_format: "auto",
+        background: "auto",
+        moderation: "auto",
         mode: "text-to-image",
         daily_usage: {
           generation_count: 1,
-          limit: 20
+          limit: null,
+          limited: false
         }
       }
     });
@@ -212,6 +248,7 @@ describe("POST /api/images/generations", () => {
 
   it("provider 失败写失败日志，不递增 daily_usage", async () => {
     mockUser();
+    const warnMock = vi.spyOn(console, "warn").mockImplementation(() => {});
     const generateImage = vi.fn(async () => {
       throw new Error("provider_request_failed");
     });
@@ -237,6 +274,41 @@ describe("POST /api/images/generations", () => {
     expect(JSON.stringify(logs)).not.toContain(validBody.prompt);
     expect(JSON.stringify(logs)).not.toContain("test-key");
     expect(JSON.stringify(logs)).not.toContain("Error:");
+    expect(mockCreateAdapter).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: "toioto"
+      }),
+      expect.objectContaining({
+        logger: console,
+        requestId: expect.stringMatching(/^img_/)
+      })
+    );
+    const requestId = mockCreateAdapter.mock.calls[0]?.[1]?.requestId;
+    expect(warnMock).toHaveBeenCalledWith(
+      "[image-service] image request failed",
+      expect.objectContaining({
+        requestId,
+        providerId: "toioto",
+        model: "gpt-image-2",
+        mode: "text-to-image",
+        hasReferenceImage: false,
+        promptLength: validBody.prompt.length,
+        errorCode: "provider_request_failed",
+        durationMs: expect.any(Number)
+      })
+    );
+    const failedLogContext = warnMock.mock.calls.find(
+      ([message]) => message === "[image-service] image request failed"
+    )?.[1];
+    expect(failedLogContext).not.toHaveProperty("size");
+    expect(failedLogContext).not.toHaveProperty("resolution");
+    expect(failedLogContext).not.toHaveProperty("providerSize");
+    expect(failedLogContext).not.toHaveProperty("quality");
+    expect(failedLogContext).not.toHaveProperty("outputFormat");
+    expect(failedLogContext).not.toHaveProperty("background");
+    expect(failedLogContext).not.toHaveProperty("moderation");
+    expect(JSON.stringify(warnMock.mock.calls)).not.toContain(validBody.prompt);
+    warnMock.mockRestore();
   });
 
   it("provider 返回空图片时写失败日志，不递增 daily_usage", async () => {

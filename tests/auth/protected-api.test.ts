@@ -25,7 +25,7 @@ describe("GET /api/auth/me", () => {
     expect(response.status).toBe(401);
     expect(body).toEqual({
       error: "auth_required",
-      message: "请先登录后再使用 image-service。"
+      message: "请先登录后再使用 Focal。"
     });
   });
 });

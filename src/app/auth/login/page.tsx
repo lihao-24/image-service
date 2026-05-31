@@ -20,9 +20,9 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
       <form className="auth-panel" action="/auth/sign-in" method="post">
         <input name="redirectTo" type="hidden" value={redirectTo} />
         <p className="eyebrow">Supabase Auth</p>
-        <h1>登录后使用生图服务</h1>
+        <h1>登录后使用 Focal</h1>
         <p className="lead">
-          image-service 目前不开放匿名访问，请使用已有账号登录。
+          Focal 目前不开放匿名访问，请使用已有账号登录。
         </p>
 
         <label className="field">

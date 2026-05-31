@@ -32,11 +32,14 @@ const validRecipeBody = {
   prompt: "一张海边晚霞产品照片",
   negative_prompt: "低清晰度",
   mode: "text-to-image",
-  provider: "sub2api",
+  provider: "toioto",
   model: "gpt-image-2",
-  size: "1024x1536",
+  size: "2:3",
+  resolution: "standard",
   quality: "high",
   output_format: "png",
+  background: "opaque",
+  moderation: "low",
   params: { seed: 123 },
   reference_mode: "none",
   is_favorite: true
@@ -110,7 +113,16 @@ describe("Prompt recipe API", () => {
       user_id: "server-user",
       title: "海边晚霞",
       prompt: "一张海边晚霞产品照片",
-      output_format: "png"
+      provider: "toioto",
+      model: "gpt-image-2",
+      size: "auto",
+      resolution: null,
+      output_format: "auto",
+      background: null,
+      moderation: null,
+      params: {
+        seed: 123
+      }
     });
     expect(listPromptRecipes(currentDb, "server-user")).toHaveLength(1);
     expect(listPromptRecipes(currentDb, "client-user")).toHaveLength(0);
@@ -119,10 +131,7 @@ describe("Prompt recipe API", () => {
 
   it.each([
     ["provider", { provider: "evil-provider" }],
-    ["model", { model: "unknown-model" }],
-    ["size", { size: "2048x2048" }],
-    ["quality", { quality: "ultra" }],
-    ["output_format", { output_format: "gif" }]
+    ["model", { model: "unknown-model" }]
   ])("保存 recipe 时拒绝非法 %s allowlist 参数", async (_field, patch) => {
     mockUser("user-a");
 
@@ -205,12 +214,17 @@ function dbRecipeInput(patch: Partial<Parameters<typeof createPromptRecipe>[2]> 
     prompt: "一张海边晚霞产品照片",
     negativePrompt: "低清晰度",
     mode: "text-to-image",
-    provider: "sub2api",
+    provider: "toioto",
     model: "gpt-image-2",
-    size: "1024x1536",
+    size: "2:3",
     quality: "high",
     outputFormat: "png",
-    params: { seed: 123 },
+    params: {
+      seed: 123,
+      resolution: "standard",
+      background: "opaque",
+      moderation: "low"
+    },
     referenceMode: "none",
     isFavorite: true,
     ...patch

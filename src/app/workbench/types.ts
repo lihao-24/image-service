@@ -7,9 +7,6 @@ export type TemplateSourceView = "builtin" | "mine" | "favorites" | "category";
 export type GenerationParamsSnapshot = {
   provider: string;
   model: string;
-  size: string;
-  quality: string;
-  outputFormat: string;
 };
 
 export type TemporaryImage = {
@@ -99,8 +96,11 @@ export type MineTemplateRecord = {
   provider?: string;
   model: string;
   size: string;
+  resolution?: string | null;
   quality: string;
   output_format: string;
+  background?: string | null;
+  moderation?: string | null;
   prompt: string;
   reference_mode: string | null;
   is_favorite: boolean;
@@ -118,6 +118,8 @@ export type TemplateLibrary = {
 };
 
 export type DailyUsage = {
+  date?: string;
   generation_count?: number;
-  limit?: number;
+  limit?: number | null;
+  limited?: boolean;
 };

@@ -19,7 +19,7 @@ describe("auth helper", () => {
     expect(result).toEqual({
       ok: false,
       code: AUTH_REQUIRED,
-      message: "请先登录后再使用 image-service。"
+      message: "请先登录后再使用 Focal。"
     });
   });
 

@@ -13,10 +13,13 @@ export type TextToImageRequestBody = {
   provider: string;
   model: string;
   prompt: string;
-  size: string;
-  quality: string;
+  size?: string;
+  resolution?: string;
+  quality?: string;
   output_format?: string;
   outputFormat?: string;
+  background?: string;
+  moderation?: string;
 };
 
 export type TextToImageRequestValidationResult =
@@ -69,20 +72,12 @@ export function validateTextToImageRequestBody(
     return invalidGenerationParams("model", "请选择有效的 model。");
   }
 
-  const size = readRequiredString(input.size);
-  if (!size) {
-    return invalidGenerationParams("size", "请选择有效的图片尺寸。");
-  }
-
-  const quality = readRequiredString(input.quality);
-  if (!quality) {
-    return invalidGenerationParams("quality", "请选择有效的图片质量。");
-  }
-
-  const outputFormat = readRequiredString(input.output_format ?? input.outputFormat);
-  if (!outputFormat) {
-    return invalidGenerationParams("output_format", "请选择有效的输出格式。");
-  }
+  const size = readOptionalString(input.size);
+  const resolution = readOptionalString(input.resolution);
+  const quality = readOptionalString(input.quality);
+  const outputFormat = readOptionalString(input.output_format ?? input.outputFormat);
+  const background = readOptionalString(input.background);
+  const moderation = readOptionalString(input.moderation);
 
   return {
     ok: true,
@@ -90,9 +85,12 @@ export function validateTextToImageRequestBody(
       provider,
       model,
       prompt,
-      size,
-      quality,
-      output_format: outputFormat
+      ...(size ? { size } : {}),
+      ...(resolution ? { resolution } : {}),
+      ...(quality ? { quality } : {}),
+      ...(outputFormat ? { output_format: outputFormat } : {}),
+      ...(background ? { background } : {}),
+      ...(moderation ? { moderation } : {})
     }
   };
 }
@@ -110,8 +108,11 @@ export function validateReferenceImageFormData(
     model: formData.get("model"),
     prompt: formData.get("prompt"),
     size: formData.get("size"),
+    resolution: formData.get("resolution"),
     quality: formData.get("quality"),
-    output_format: formData.get("output_format") ?? formData.get("outputFormat")
+    output_format: formData.get("output_format") ?? formData.get("outputFormat"),
+    background: formData.get("background"),
+    moderation: formData.get("moderation")
   });
 
   if (!bodyResult.ok) {
@@ -131,24 +132,30 @@ export function validateReferenceImageFormData(
 export function createTemporaryImageResponse(
   b64Json: string,
   params: ValidatedImageGenerationParams,
-  dailyUsage: { generationCount: number; limit: number },
-  options: { mode?: "text-to-image" | "image-edit" } = {}
+  dailyUsage: { generationCount: number; limit: number | null; limited?: boolean },
+  options: { mode?: "text-to-image" | "image-edit"; outputFormat?: string } = {}
 ) {
+  const outputFormat = options.outputFormat ?? params.outputFormat ?? "auto";
+
   return {
     image: {
       b64_json: b64Json,
-      output_format: params.outputFormat
+      output_format: outputFormat
     },
     meta: {
       provider: params.provider,
       model: params.model,
       size: params.size,
+      resolution: params.resolution,
       quality: params.quality,
-      output_format: params.outputFormat,
+      output_format: outputFormat,
+      background: params.background,
+      moderation: params.moderation,
       mode: options.mode ?? "text-to-image",
       daily_usage: {
         generation_count: dailyUsage.generationCount,
-        limit: dailyUsage.limit
+        limit: dailyUsage.limit,
+        limited: dailyUsage.limited ?? true
       }
     }
   };
@@ -156,6 +163,10 @@ export function createTemporaryImageResponse(
 
 function readRequiredString(value: unknown): string | null {
   return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function readOptionalString(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim() ? value.trim() : undefined;
 }
 
 function validateReferenceImage(value: FormDataEntryValue | null): ReferenceImageValidationResult {

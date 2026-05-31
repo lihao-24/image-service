@@ -20,6 +20,11 @@ export const PROMPT_TEMPLATE_CATEGORIES = [
     description: "商品主图、产品广告、包装标签、拆解图和电商英雄图。"
   },
   {
+    id: "image-edit",
+    name: "图生图",
+    description: "参考图转换、证件照、头像、人像和主体重绘。"
+  },
+  {
     id: "brand-logo",
     name: "品牌与标志",
     description: "Logo 概念、品牌身份、触点系统、品牌人格和视觉规范。"

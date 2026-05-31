@@ -1,20 +1,30 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { AUTH_REQUIRED, getSessionUser } from "@/lib/auth";
 import { createServerSupabaseClient } from "@/lib/auth/server";
-import { parseImageServiceConfig, validateImageGenerationParams } from "@/lib/config";
+import {
+  parseImageServiceConfig,
+  validateImageGenerationParams
+} from "@/lib/config";
+import {
+  createImageRequestId,
+  logImageRequestFailed,
+  logImageRequestStarted,
+  type ImageRequestLogContext
+} from "@/lib/diagnostics/image-logs";
 import { closeDatabase, initializeDatabase, openDatabase } from "@/lib/db";
 import {
   createTemporaryImageResponse,
   INVALID_GENERATION_PARAMS,
   validateTextToImageRequestBody
 } from "@/lib/images";
-import { createOpenAICompatibleImagesAdapter } from "@/lib/providers";
+import { createImagesAdapterForProvider } from "@/lib/providers";
 import {
   checkDailyQuota,
   getDailyLimit,
   getUsageDate,
   incrementSuccessfulGenerationUsage,
   QUOTA_EXCEEDED,
+  shouldEnforceDailyQuota,
   writeGenerationLog
 } from "@/lib/usage";
 
@@ -40,7 +50,9 @@ export async function POST(request: NextRequest | Request) {
   }
 
   const config = parseImageServiceConfig();
-  const paramsResult = validateImageGenerationParams(bodyResult.body, config);
+  const paramsResult = validateImageGenerationParams(bodyResult.body, config, {
+    mode: TEXT_TO_IMAGE_MODE
+  });
   if (!paramsResult.ok) {
     return invalidGenerationParamsResponse(paramsResult.message);
   }
@@ -50,11 +62,15 @@ export async function POST(request: NextRequest | Request) {
 
   const usageDate = getUsageDate();
   const dailyLimit = getDailyLimit();
+  const quotaLimited = shouldEnforceDailyQuota(paramsResult.params.model);
   const startedAt = performance.now();
+  const requestId = createImageRequestId();
 
   try {
-    const quota = checkDailyQuota(db, userResult.userId, usageDate, dailyLimit);
-    if (!quota.ok) {
+    const quota = quotaLimited
+      ? checkDailyQuota(db, userResult.userId, usageDate, dailyLimit)
+      : null;
+    if (quota && !quota.ok) {
       writeGenerationLog(db, userResult.userId, {
         provider: paramsResult.params.provider,
         model: paramsResult.params.model,
@@ -78,19 +94,32 @@ export async function POST(request: NextRequest | Request) {
       );
     }
 
-    const adapter = createOpenAICompatibleImagesAdapter();
+    const adapter = createImagesAdapterForProvider(paramsResult.provider, {
+      logger: console,
+      requestId
+    });
     let result: Awaited<ReturnType<typeof adapter.generateImage>>;
+    let logContext: ImageRequestLogContext | null = null;
 
     try {
+      logContext = {
+        requestId,
+        providerId: paramsResult.params.provider,
+        model: paramsResult.params.model,
+        mode: TEXT_TO_IMAGE_MODE,
+        hasReferenceImage: false,
+        promptLength: bodyResult.body.prompt.length
+      };
+      logImageRequestStarted(console, logContext);
       result = await adapter.generateImage(paramsResult.provider, {
         model: paramsResult.params.model,
-        prompt: bodyResult.body.prompt,
-        size: paramsResult.params.size,
-        quality: paramsResult.params.quality,
-        outputFormat: paramsResult.params.outputFormat
+        prompt: bodyResult.body.prompt
       });
     } catch (error) {
       const errorCode = normalizeProviderErrorCode(error);
+      if (logContext) {
+        logImageRequestFailed(console, logContext, errorCode, elapsedMs(startedAt));
+      }
       writeGenerationLog(db, userResult.userId, {
         provider: paramsResult.params.provider,
         model: paramsResult.params.model,
@@ -116,6 +145,9 @@ export async function POST(request: NextRequest | Request) {
 
     if (!isUsableImageB64Json(result.b64Json)) {
       const errorCode = "provider_response_invalid";
+      if (logContext) {
+        logImageRequestFailed(console, logContext, errorCode, elapsedMs(startedAt));
+      }
       writeGenerationLog(db, userResult.userId, {
         provider: paramsResult.params.provider,
         model: paramsResult.params.model,
@@ -161,10 +193,16 @@ export async function POST(request: NextRequest | Request) {
     });
 
     return NextResponse.json(
-      createTemporaryImageResponse(result.b64Json, paramsResult.params, {
-        generationCount,
-        limit: dailyLimit
-      })
+      createTemporaryImageResponse(
+        result.b64Json,
+        paramsResult.params,
+        {
+          generationCount,
+          limit: quotaLimited ? dailyLimit : null,
+          limited: quotaLimited
+        },
+        { outputFormat: result.outputFormat ?? "auto" }
+      )
     );
   } finally {
     closeDatabase(db);
@@ -200,6 +238,7 @@ function normalizeProviderErrorCode(error: unknown): string {
       case "provider_response_invalid":
       case "provider_rate_limited":
       case "provider_auth_failed":
+      case "provider_content_policy_violation":
         return error.message;
       default:
         return "provider_request_failed";

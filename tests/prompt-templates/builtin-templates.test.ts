@@ -6,6 +6,7 @@ const EXPECTED_CATEGORIES = [
   ["infographic", "图表与信息可视化"],
   ["poster-typography", "海报与排版"],
   ["ecommerce-product", "商品与电商"],
+  ["image-edit", "图生图"],
   ["brand-logo", "品牌与标志"],
   ["architecture-space", "建筑与空间"],
   ["photoreal", "摄影与写实"],
@@ -22,8 +23,8 @@ const ALLOWED_QUALITIES = ["high", "medium", "low"];
 const ALLOWED_OUTPUT_FORMATS = ["png", "jpeg", "webp"];
 
 describe("内置提示词模板", () => {
-  it("提供 awesome-gpt-image-2 gallery 的 13 个中文分类", () => {
-    expect(PROMPT_TEMPLATE_CATEGORIES).toHaveLength(13);
+  it("提供 awesome-gpt-image-2 gallery 的中文分类和图生图入口", () => {
+    expect(PROMPT_TEMPLATE_CATEGORIES).toHaveLength(14);
     expect(PROMPT_TEMPLATE_CATEGORIES.map((category) => [category.id, category.name])).toEqual(
       EXPECTED_CATEGORIES
     );
@@ -95,6 +96,26 @@ describe("内置提示词模板", () => {
     for (const template of imageEditTemplates) {
       expect(template.recommended.referenceMode).toBe("single-image");
     }
+  });
+
+  it("图生图分类包含常用参考图转换模板", () => {
+    const imageEditTemplates = BUILTIN_PROMPT_TEMPLATES.filter(
+      (template) => template.category === "image-edit"
+    );
+
+    expect(imageEditTemplates.map((template) => template.title)).toEqual(
+      expect.arrayContaining([
+        "根据图片生成证件照",
+        "根据图片生成动漫头像",
+        "根据图片中的人生成动物",
+        "根据图片中的动物生成人",
+        "根据图片中的人生成反转性别的照片"
+      ])
+    );
+    expect(imageEditTemplates.every((template) => template.mode === "image-edit")).toBe(true);
+    expect(
+      imageEditTemplates.every((template) => template.recommended.referenceMode === "single-image")
+    ).toBe(true);
   });
 
   it("模板变量声明和 prompt 占位符保持一致", () => {

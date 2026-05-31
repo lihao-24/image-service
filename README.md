@@ -1,9 +1,10 @@
 # image-service
 
-`image-service` 是个人 AI 服务体系中的生图网页服务。
+`image-service`（品牌名 Focal）是个人 AI 服务体系中的生图网页服务。
 
 当前已创建 Next.js 应用骨架、登录边界、SQLite 数据层、provider allowlist、
-OpenAI 兼容 Images API adapter、生成 API、Prompt 配方保存 API 和登录后的中文生图工作台。
+OpenAI 兼容 Images API adapter、生成 API、Prompt 配方保存 API、Prompt 模板库、
+用量统计和登录后的中文聊天式生图工作台。
 测试使用 mock provider，不调用真实 provider。
 
 ## 本地开发
@@ -31,12 +32,51 @@ git diff --check
 
 ## Provider 配置
 
-服务端通过 `IMAGE_PROVIDER_OPTIONS` 配置 provider allowlist，并用
-`IMAGE_DEFAULT_PROVIDER`、`IMAGE_DEFAULT_MODEL`、`IMAGE_DEFAULT_SIZE`、
-`IMAGE_DEFAULT_QUALITY`、`IMAGE_DEFAULT_OUTPUT_FORMAT` 配置默认值。公开接口
-`/api/image-options` 只返回 `defaultProvider`、`defaults`、provider
-`id/label/models` 和尺寸、质量、格式选项，不包含 `baseUrl`、`apiKeyEnv`
-或 API key。
+服务端通过 `IMAGE_PROVIDER_OPTIONS` 配置 provider -> models 二级 allowlist，并用
+`IMAGE_DEFAULT_PROVIDER`、`IMAGE_DEFAULT_MODEL` 选择默认模型。当前默认是
+`toioto / gpt-image-2`。
+
+provider 的 `id` 是稳定配置值，`label` 是界面展示名；两者不要混用。每个 provider
+持有连接信息和自己的 `models` 列表，model 持有 `id`、`label`、`family`、启用状态和
+文生图/参考图生图能力。公开接口 `/api/image-options` 只返回默认 provider/model 和
+provider/model 的公开字段，不包含 `baseUrl`、`apiKeyEnv` 或 API key。
+
+当前支持两类 provider type：
+
+- `openai-compatible-images`：用于 OpenAI Images API 兼容接口。文生图请求发到
+  `{baseUrl}/images/generations`，请求体只包含 `model` 和 `prompt`；参考图生图发到
+  `{baseUrl}/images/edits`，FormData 只包含 `model`、`prompt` 和 `image`。认证默认使用
+  `Authorization: Bearer <apiKey>`。
+- `gemini-generate-content`：用于 Gemini `generateContent` 形状接口。请求发到
+  `{baseUrl}/models/{model}:generateContent`，文生图使用 `contents.parts[].text`，参考图生图
+  额外提交 `inline_data` 图片。FastCode Gemini 当前使用 `authStyle: "api-key-header"`，
+  即 `x-goog-api-key`。
+
+当前 env 模板包含三个 provider：
+
+- `toioto`：展示名 `Toioto`，`type` 为 `openai-compatible-images`，`baseUrl`
+  为 `https://sub2api.toioto.org/v1`，`apiKeyEnv` 为 `SUB2API_API_KEY`，模型为
+  `gpt-image-2`。
+- `fastcode`：展示名 `FastCode`，`type` 为 `openai-compatible-images`，`baseUrl`
+  为 `https://timebackward.com/v1`，`apiKeyEnv` 为 `FASTCODE_API_KEY`，模型为
+  `gpt-image-2-2k` 和 `gpt-image-2-4k`。
+- `fastcode-gemini`：展示名 `FastCode Gemini`，`type` 为
+  `gemini-generate-content`，`baseUrl` 为 `https://timebackward.com/v1beta`，
+  `apiKeyEnv` 为 `FASTCODE_API_KEY`，`authStyle` 为 `api-key-header`。当前模型为
+  `gemini-3.1-flash-image-preview`，展示名 `Gemini 3.1 Flash`，支持文生图和参考图生图。
+
+新增供应商时，优先复制同类 provider 的结构，并确认上游真实接口形状后再选择 `type`：
+
+- 兼容 OpenAI Images API 的上游放在独立 `openai-compatible-images` provider 下。
+- Gemini `generateContent` 形状的上游放在独立 `gemini-generate-content` provider 下。
+- 不要把 Gemini 模型塞进 `openai-compatible-images` provider 下，除非上游明确把该模型包装成
+  OpenAI Images API 形状并完成实测。
+- 每个新模型都要配置 `family`、`enabled`、`supportsTextToImage` 和
+  `supportsImageToImage`；不支持某种模式的模型不要在对应能力上写 `true`。
+
+主生成流程已瘦身为 provider + model + prompt + 可选参考图。旧的 size、resolution、quality、
+output format、background 和 moderation 不再作为主流程参数发送给上游；`generation_logs`
+中的旧字段暂时保留兼容，占位值通常为 `auto`。
 
 ## Prompt 配方 API
 
@@ -46,15 +86,34 @@ git diff --check
 - `PATCH /api/recipes/[recipeId]`：更新自己的 Prompt 配方。
 - `DELETE /api/recipes/[recipeId]`：删除自己的 Prompt 配方。
 
-保存和更新会在服务端按 allowlist 校验 `provider`、`model`、`size`、`quality`
-和 `output_format`。`user_id` 只来自服务端 Auth helper；接口不会接受客户端
-provider 配置、base URL 或 API key 元数据。生成 API 不会自动保存 Prompt 配方，
-只有显式调用 recipe API 才写入 `prompt_recipes`。
+保存和更新会在服务端按 allowlist 校验 `provider` 和 `model`。
+`user_id` 只来自服务端 Auth helper；接口不会接受客户端 provider 配置、base URL
+或 API key 元数据。生成 API 不会自动保存 Prompt 配方，只有显式调用 recipe API
+才写入 `prompt_recipes`。
+
+## Prompt 模板
+
+应用内置 Prompt 模板库，支持按分类浏览和收藏。
+
+- `GET /api/prompt-templates`：列出模板库。
+- `GET /api/prompt-templates/favorites`：列出当前用户收藏的模板。
+- `POST /api/prompt-templates/favorites/[templateId]`：收藏模板。
+- `DELETE /api/prompt-templates/favorites/[templateId]`：取消收藏模板。
+
+模板渲染走 `src/lib/prompt-templates/render.ts`，支持变量替换。
+
+## 用量 API
+
+- `GET /api/usage`：返回当前用户当日用量统计。
+
+gpt-image 系列模型不计入每日配额。生成日志写入 SQLite `generation_logs` 表，包含
+provider、model、mode、status、error_code、duration_ms 以及旧参数兼容占位字段。
 
 ## 前端生图工作台
 
-登录后访问 `/` 会进入生图工作台。页面参数控件来自 `/api/image-options` 的公开
-allowlist，支持文生图、参考图生图、临时预览、下载当前临时图片和手动保存配置。
+登录后访问 `/` 会进入聊天式生图工作台。页面参数控件来自 `/api/image-options` 的公开
+allowlist，支持文生图、参考图生图、Prompt 模板浏览和收藏、用量查看、临时预览、
+下载当前临时图片和手动保存配置。
 生成成功不会自动保存 Prompt 配方；生成图片 base64 只保留在当前浏览器状态中，不写入
 `localStorage`、SQLite、服务器磁盘或日志。
 
@@ -85,8 +144,22 @@ https://image.lihao66.top
 cp env/image-service.production.env.example .env.production
 ```
 
-然后填入真实 `NEXT_PUBLIC_SUPABASE_ANON_KEY`、`SUB2API_API_KEY` 等值。不要提交
-`.env.production`。
+然后填入真实 `NEXT_PUBLIC_SUPABASE_ANON_KEY`、`SUB2API_API_KEY`、`FASTCODE_API_KEY`
+等值。不要提交 `.env.production`。
+
+上线前重点核对 `.env.production`：
+
+- `NEXT_PUBLIC_APP_URL` 与线上域名一致。
+- `NEXT_PUBLIC_SUPABASE_URL`、`NEXT_PUBLIC_SUPABASE_ANON_KEY` 是生产可用值，且不是
+  service role key。
+- `IMAGE_DEFAULT_PROVIDER` 和 `IMAGE_DEFAULT_MODEL` 指向 `IMAGE_PROVIDER_OPTIONS` 中已启用
+  的 provider/model；默认仍建议保持 `toioto / gpt-image-2`，新 provider 稳定后再单独切换。
+- `IMAGE_PROVIDER_OPTIONS` 是合法单行 JSON。OpenAI-compatible provider 与 Gemini
+  generateContent provider 分开配置；Gemini 不放进 `fastcode` 这类
+  `openai-compatible-images` provider 下。
+- 每个 provider 的 `apiKeyEnv` 都有对应真实环境变量；模板里的空字符串占位要在生产环境补齐。
+- `IMAGE_SERVICE_SQLITE_PATH` 指向容器内 `/data/sqlite/image-service.sqlite`，并由 compose volume
+  挂载到宿主机持久化目录。
 
 生产数据目录：
 
@@ -108,8 +181,59 @@ curl -fsS http://127.0.0.1:3010/health
 curl -I https://image.lihao66.top/health
 ```
 
+部署前建议先在当前提交上跑完整验证：
+
+```bash
+pnpm lint
+pnpm typecheck
+pnpm test
+pnpm build
+git diff --check
+```
+
+部署后建议至少做一次健康检查、一次登录页面访问检查，并在登录后分别用当前默认模型和需要上线的
+新增 provider 做文生图 smoke test；如上线 Gemini provider，再额外做一次参考图生图 smoke test。
+确认容器日志里没有 provider 配置解析错误、认证错误或 `provider_response_invalid` 后，再把外部入口视为可用。
+
 VPS Caddy 站点片段参考 `caddy/sites/image.lihao66.top.caddy`。Caddy 和 DNS 变更需要在
 对应机器上手动确认后应用。
+
+## 线上排障
+
+查看生产容器日志：
+
+```bash
+docker compose --env-file .env.production -f compose/prod/image-service.prod.compose.yml logs --tail=220 image-service
+```
+
+查看最近生成记录：
+
+```bash
+sqlite3 /Users/hao/Desktop/lihao-data/image-service/sqlite/image-service.sqlite \
+  "select datetime(created_at,'localtime'), status, coalesce(error_code,'(none)'), provider, model, mode, size, quality, output_format, duration_ms from generation_logs order by created_at desc limit 30;"
+```
+
+按错误类型汇总：
+
+```bash
+sqlite3 /Users/hao/Desktop/lihao-data/image-service/sqlite/image-service.sqlite \
+  "select status, coalesce(error_code,'(none)'), provider, model, mode, count(*), min(created_at), max(created_at), round(avg(duration_ms),1) from generation_logs group by status, error_code, provider, model, mode order by max(created_at) desc;"
+```
+
+图片生成失败路径会输出结构化诊断日志，并用同一个 `requestId` 串联 route 和 provider：
+
+```text
+[image-service] image request started
+[image-provider] provider response json parse failed
+[image-provider] provider error response
+[image-provider] invalid provider response
+[image-service] image request failed
+```
+
+这些日志只记录 requestId、provider id、endpoint、HTTP status、content-type、content-length、
+参数摘要、prompt 长度、响应顶层字段、`data` 数量、provider error code/type 和截断脱敏后的
+非 JSON body 预览。不记录 prompt 全文、图片 base64、上传图片内容、请求头、API key、cookie
+或完整 provider message。
 
 ## 后续更新
 
@@ -137,6 +261,7 @@ docker compose --env-file .env.production -f compose/prod/image-service.prod.com
 ## 模块边界
 
 - `src/app/`：页面、路由和健康检查。
+- `src/app/workbench/`：工作台拆分组件、类型、helper、弹窗和图标。
 - `src/lib/auth/`：Supabase Auth 服务端 helper、cookie session 刷新和用户校验。
 - `src/lib/config/`：服务端配置解析、provider allowlist、公开投影和参数校验。
 - `src/lib/db/`：SQLite 连接、schema 和按用户隔离的查询 helper。
@@ -144,11 +269,18 @@ docker compose --env-file .env.production -f compose/prod/image-service.prod.com
 - `src/lib/usage/`：每日额度和 generation log。
 - `src/lib/recipes/`：Prompt 配方校验和按用户隔离的 CRUD helper。
 - `src/lib/images/`：图片请求校验和响应辅助。
+- `src/lib/prompt-templates/`：内置模板、分类、模板渲染和模板索引。
+- `src/lib/diagnostics/`：结构化图片生成失败诊断日志。
 
 参考文档：
 
-- `docs/specs/2026-05-17-image-service-mvp-design.md`
-- `docs/reference/openai-compatible-images-api.md`
-- `docs/reference/data-and-storage.md`
-- `docs/controller/master-window-prompt.md`
-- `docs/controller/phase0-progress.md`
+- `docs/README.md`：文档索引。
+- `docs/specs/2026-05-29-prompt-first-provider-model-slimming-design.md`：当前
+  provider-model 二级配置和主流程瘦身设计。
+- `docs/superpowers/plans/2026-05-29-prompt-first-provider-model-slimming-plan.md`：
+  上述设计的实施计划和验证背景。
+- `docs/specs/2026-05-17-image-service-mvp-design.md`：MVP 设计规格。
+- `docs/specs/2026-05-18-chat-style-image-workbench-redesign.md`：聊天式工作台重设计。
+- `docs/specs/2026-05-19-gpt-image-2-and-usage-hardening-design.md`：gpt-image-2 和用量加固设计。
+- `docs/reference/openai-compatible-images-api.md`：当前 provider 和图片接口调用约束。
+- `docs/reference/data-and-storage.md`：数据和存储约束。

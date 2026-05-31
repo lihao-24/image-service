@@ -8,10 +8,18 @@ import {
 import {
   checkDailyQuota,
   incrementSuccessfulGenerationUsage,
+  shouldEnforceDailyQuota,
   writeGenerationLog
 } from "@/lib/usage";
 
 describe("usage quota/log helpers", () => {
+  it("GPT Image 官方模型只统计用量，不做每日额度拦截", () => {
+    expect(shouldEnforceDailyQuota("gpt-image-2")).toBe(false);
+    expect(shouldEnforceDailyQuota("gpt-image-1")).toBe(false);
+    expect(shouldEnforceDailyQuota("gpt-image-1-mini")).toBe(false);
+    expect(shouldEnforceDailyQuota("imagen-4")).toBe(true);
+  });
+
   it("按用户和日期检查每日额度", () => {
     const db = openDatabase(":memory:");
     initializeDatabase(db);

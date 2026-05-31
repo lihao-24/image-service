@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useSyncExternalStore, useState } from "reac
 import type { PublicImageConfig } from "@/lib/config";
 import { ChatSidebar } from "./workbench/chat-sidebar";
 import {
+  compressReferenceImageForUpload,
   createId,
   formatUsage,
   readSafeErrorMessage,
@@ -47,20 +48,18 @@ type SaveStatus = "idle" | "saving" | "saved" | "error";
 
 export default function ImageWorkbench({ config, userLabel }: ImageWorkbenchProps) {
   const isMobileViewport = useIsMobileViewport();
-  const provider = useMemo(
-    () =>
-      config.providers.find((item) => item.id === config.defaultProvider) ??
-      config.providers[0],
-    [config.defaultProvider, config.providers]
-  );
-  const providerId = provider?.id ?? config.defaultProvider;
   const [params, setParams] = useState<GenerationParamsSnapshot>({
-    provider: providerId,
-    model: config.defaults.model,
-    size: config.defaults.size,
-    quality: config.defaults.quality,
-    outputFormat: config.defaults.outputFormat
+    provider: readInitialProviderId(config),
+    model: readInitialModelId(config)
   });
+  const provider = useMemo(
+    () => findProvider(config, params.provider) ?? config.providers[0],
+    [config, params.provider]
+  );
+  const providerLabels = useMemo(
+    () => Object.fromEntries(config.providers.map((item) => [item.id, item.label])),
+    [config.providers]
+  );
   const [mode, setMode] = useState<GenerationMode>("text-to-image");
   const [prompt, setPrompt] = useState("");
   const [referenceImage, setReferenceImage] = useState<File | null>(null);
@@ -71,7 +70,6 @@ export default function ImageWorkbench({ config, userLabel }: ImageWorkbenchProp
   const [isGenerating, setIsGenerating] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
-  const [settingsExpanded, setSettingsExpanded] = useState(false);
   const [templateModal, setTemplateModal] = useState<TemplateModalState>({ open: false });
   const [library, setLibrary] = useState<TemplateLibrary | null>(null);
   const [usageText, setUsageText] = useState("");
@@ -82,6 +80,7 @@ export default function ImageWorkbench({ config, userLabel }: ImageWorkbenchProp
 
   useEffect(() => {
     void loadTemplateLibrary();
+    void loadUsage();
   }, []);
 
   useEffect(() => {
@@ -122,8 +121,55 @@ export default function ImageWorkbench({ config, userLabel }: ImageWorkbenchProp
     }
   }
 
-  function updateParams(nextParams: Partial<GenerationParamsSnapshot>) {
-    setParams((current) => ({ ...current, ...nextParams, provider: providerId }));
+  async function loadUsage() {
+    try {
+      const response = await fetch("/api/usage");
+      const payload = (await response.json().catch(() => ({}))) as { usage?: DailyUsage };
+
+      if (response.ok) {
+        setUsageText(formatUsage(payload.usage));
+      }
+    } catch {
+      setUsageText("");
+    }
+  }
+
+  function updateParams(
+    nextParams: Partial<GenerationParamsSnapshot>,
+    targetMode: GenerationMode = mode
+  ) {
+    setParams((current) => {
+      if (nextParams.provider && nextParams.provider !== current.provider) {
+        const nextProvider = findProvider(config, nextParams.provider);
+        if (!nextProvider) {
+          const currentProvider = findProvider(config, current.provider);
+          return {
+            provider: current.provider,
+            model: readFirstSupportedModelId(currentProvider, targetMode) ?? current.model
+          };
+        }
+        const requestedModel = nextParams.model
+          ? findModel(nextProvider, nextParams.model)?.id
+          : undefined;
+        return {
+          provider: nextProvider.id,
+          model:
+            readSupportedModelId(nextProvider, requestedModel, targetMode) ??
+            readFirstSupportedModelId(nextProvider, targetMode) ??
+            current.model
+        };
+      }
+
+      const nextProvider = findProvider(config, current.provider);
+      const requestedModel = nextParams.model ?? current.model;
+      return {
+        provider: current.provider,
+        model:
+          readSupportedModelId(nextProvider, requestedModel, targetMode) ??
+          readFirstSupportedModelId(nextProvider, targetMode) ??
+          current.model
+      };
+    });
   }
 
   function useTemplate(payload: {
@@ -132,13 +178,13 @@ export default function ImageWorkbench({ config, userLabel }: ImageWorkbenchProp
     params: GenerationParamsSnapshot;
   }) {
     setPrompt(payload.prompt);
-    updateParams({
-      model: payload.params.model,
-      size: payload.params.size,
-      quality: payload.params.quality,
-      outputFormat: payload.params.outputFormat
-    });
     setMode(payload.mode);
+    updateParams(payload.params, payload.mode);
+  }
+
+  function handleModeChange(nextMode: GenerationMode) {
+    setMode(nextMode);
+    updateParams({}, nextMode);
   }
 
   function handleReferenceImageChange(file: File | null) {
@@ -264,7 +310,7 @@ export default function ImageWorkbench({ config, userLabel }: ImageWorkbenchProp
       }
 
       const b64Json = payload.image?.b64_json?.trim();
-      const format = payload.image?.output_format || generationParams.outputFormat;
+      const format = payload.image?.output_format || "png";
 
       if (!b64Json) {
         throw new Error(SAFE_PROVIDER_ERROR_MESSAGE);
@@ -276,7 +322,7 @@ export default function ImageWorkbench({ config, userLabel }: ImageWorkbenchProp
         image: {
           src: `data:image/${format};base64,${b64Json}`,
           outputFormat: format,
-          filename: `image-service-preview.${format === "jpeg" ? "jpg" : format}`
+          filename: `focal-preview.${format === "jpeg" ? "jpg" : format}`
         }
       };
 
@@ -312,10 +358,7 @@ export default function ImageWorkbench({ config, userLabel }: ImageWorkbenchProp
     const baseFields = {
       provider: generationParams.provider,
       model: generationParams.model,
-      prompt: promptText,
-      size: generationParams.size,
-      quality: generationParams.quality,
-      output_format: generationParams.outputFormat
+      prompt: promptText
     };
 
     if (generationMode === "text-to-image") {
@@ -331,7 +374,7 @@ export default function ImageWorkbench({ config, userLabel }: ImageWorkbenchProp
       formData.set(key, value);
     });
     if (generationReference) {
-      formData.set("image", generationReference);
+      formData.set("image", await compressReferenceImageForUpload(generationReference));
     }
 
     return fetch("/api/images/edits", {
@@ -343,7 +386,7 @@ export default function ImageWorkbench({ config, userLabel }: ImageWorkbenchProp
   function editUserMessage(message: WorkbenchUserMessage) {
     setPrompt(message.prompt);
     setMode(message.mode);
-    updateParams(message.params);
+    updateParams(message.params, message.mode);
 
     if (message.mode === "image-edit") {
       setReferenceImage(null);
@@ -374,6 +417,29 @@ export default function ImageWorkbench({ config, userLabel }: ImageWorkbenchProp
     });
   }
 
+  function editAssistantMessage(assistantMessageId: string) {
+    const assistantMessage = messages.find(
+      (message): message is WorkbenchAssistantMessage =>
+        message.role === "assistant" && message.id === assistantMessageId
+    );
+    if (!assistantMessage) {
+      return;
+    }
+
+    setPrompt(assistantMessage.prompt);
+    setMode(assistantMessage.mode);
+    updateParams(assistantMessage.params, assistantMessage.mode);
+    if (assistantMessage.mode === "image-edit") {
+      setReferenceImage(null);
+      if (composerPreviewUrlRef.current) {
+        URL.revokeObjectURL(composerPreviewUrlRef.current);
+        composerPreviewUrlRef.current = "";
+      }
+      setReferencePreviewUrl("");
+      setEditNotice("参考图需要重新选择。");
+    }
+  }
+
   async function saveRecipe(title: string) {
     if (!saveTarget) {
       return;
@@ -392,9 +458,6 @@ export default function ImageWorkbench({ config, userLabel }: ImageWorkbenchProp
           mode: saveTarget.mode,
           provider: saveTarget.params.provider,
           model: saveTarget.params.model,
-          size: saveTarget.params.size,
-          quality: saveTarget.params.quality,
-          output_format: saveTarget.params.outputFormat,
           reference_mode: saveTarget.mode === "image-edit" ? "single-image" : null
         })
       });
@@ -424,19 +487,18 @@ export default function ImageWorkbench({ config, userLabel }: ImageWorkbenchProp
   }
 
   return (
-    <main className="flex h-dvh w-screen overflow-hidden bg-white text-slate-950">
+    <main className="flex h-dvh w-screen overflow-hidden bg-slate-50 text-slate-950">
       {!isMobileViewport && sidebarOpen ? (
         <ChatSidebar
           className="hidden h-full w-[280px] shrink-0 flex-col overflow-hidden bg-slate-950 px-4 py-4 text-slate-100 shadow-2xl md:flex"
           categories={library?.categories ?? []}
           config={config}
           mineTemplates={library?.templates.mine ?? []}
+          mode={mode}
           onOpenTemplates={setTemplateModal}
           onParamChange={updateParams}
-          onSettingsExpandedChange={setSettingsExpanded}
           params={params}
           provider={provider}
-          settingsExpanded={settingsExpanded}
           usageText={usageText}
           userLabel={userLabel}
         />
@@ -446,7 +508,7 @@ export default function ImageWorkbench({ config, userLabel }: ImageWorkbenchProp
         <div className="fixed inset-0 z-40 md:hidden">
           <button
             aria-label="关闭侧边栏遮罩"
-            className="absolute inset-0 bg-slate-950/45"
+            className="absolute inset-0 bg-slate-950/45 backdrop-blur-[2px]"
             onClick={() => setMobileDrawerOpen(false)}
             type="button"
           />
@@ -455,16 +517,15 @@ export default function ImageWorkbench({ config, userLabel }: ImageWorkbenchProp
             categories={library?.categories ?? []}
             config={config}
             mineTemplates={library?.templates.mine ?? []}
+            mode={mode}
             onClose={() => setMobileDrawerOpen(false)}
             onOpenTemplates={(state) => {
               setTemplateModal(state);
               setMobileDrawerOpen(false);
             }}
             onParamChange={updateParams}
-            onSettingsExpandedChange={setSettingsExpanded}
             params={params}
             provider={provider}
-            settingsExpanded={settingsExpanded}
             usageText={usageText}
             userLabel={userLabel}
           />
@@ -472,7 +533,7 @@ export default function ImageWorkbench({ config, userLabel }: ImageWorkbenchProp
       ) : null}
 
       <section className="flex min-w-0 flex-1 flex-col bg-white">
-        <header className="flex min-h-14 items-center justify-between border-b border-slate-200 px-4">
+        <header className="flex min-h-14 items-center justify-between border-b border-slate-200 bg-white/95 px-4 backdrop-blur">
           <div className="flex items-center gap-3">
             <button
               aria-label={
@@ -484,7 +545,7 @@ export default function ImageWorkbench({ config, userLabel }: ImageWorkbenchProp
                     ? "隐藏侧边栏"
                     : "显示侧边栏"
               }
-              className="grid h-9 w-9 place-items-center rounded-lg text-slate-700 hover:bg-slate-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-600"
+              className="grid h-10 w-10 place-items-center rounded-lg text-slate-700 transition hover:bg-slate-100 active:bg-slate-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-600"
               onClick={() => {
                 if (isMobileViewport) {
                   setMobileDrawerOpen((current) => !current);
@@ -500,7 +561,7 @@ export default function ImageWorkbench({ config, userLabel }: ImageWorkbenchProp
           </div>
           <button
             aria-label="更多"
-            className="grid h-9 w-9 place-items-center rounded-lg text-slate-500 hover:bg-slate-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-600"
+            className="grid h-10 w-10 place-items-center rounded-lg text-slate-500 transition hover:bg-slate-100 active:bg-slate-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-600"
             type="button"
           >
             <MoreIcon />
@@ -510,6 +571,8 @@ export default function ImageWorkbench({ config, userLabel }: ImageWorkbenchProp
         <div className="min-h-0 flex-1 overflow-y-auto bg-white">
           <MessageList
             messages={messages}
+            providerLabels={providerLabels}
+            onEditAssistantMessage={editAssistantMessage}
             onEditUserMessage={editUserMessage}
             onOpenTemplateCategory={(categoryId, title) =>
               setTemplateModal({ open: true, source: "category", categoryId, title })
@@ -533,7 +596,7 @@ export default function ImageWorkbench({ config, userLabel }: ImageWorkbenchProp
         <PromptComposer
           generating={isGenerating}
           mode={mode}
-          onModeChange={setMode}
+          onModeChange={handleModeChange}
           onPromptChange={setPrompt}
           onReferenceImageChange={handleReferenceImageChange}
           onSubmit={handleGenerate}
@@ -583,4 +646,47 @@ function readIsMobileViewport() {
   }
 
   return window.innerWidth < 768;
+}
+
+function findProvider(config: PublicImageConfig, providerId: string) {
+  return config.providers.find((item) => item.id === providerId);
+}
+
+function findModel(provider: ReturnType<typeof findProvider>, modelId: string) {
+  return provider?.models.find((item) => item.id === modelId);
+}
+
+function readSupportedModelId(
+  provider: ReturnType<typeof findProvider>,
+  modelId: string | undefined,
+  mode: GenerationMode
+) {
+  const model = modelId ? findModel(provider, modelId) : undefined;
+  if (!model) {
+    return undefined;
+  }
+
+  if (mode === "image-edit") {
+    return model.supportsImageToImage ? model.id : undefined;
+  }
+
+  return model.supportsTextToImage ? model.id : undefined;
+}
+
+function readInitialProviderId(config: PublicImageConfig) {
+  return findProvider(config, config.defaultProviderId)?.id ?? config.providers[0]?.id ?? "";
+}
+
+function readInitialModelId(config: PublicImageConfig) {
+  const provider = findProvider(config, readInitialProviderId(config));
+  return findModel(provider, config.defaultModelId)?.id ?? provider?.models[0]?.id ?? "";
+}
+
+function readFirstSupportedModelId(
+  provider: ReturnType<typeof findProvider>,
+  mode: GenerationMode
+) {
+  return provider?.models.find((item) =>
+    mode === "image-edit" ? item.supportsImageToImage : item.supportsTextToImage
+  )?.id;
 }
