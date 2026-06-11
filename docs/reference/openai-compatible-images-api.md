@@ -21,6 +21,7 @@ API key 不写入 Git。`baseUrl`、`apiKeyEnv` 和 API key 都不得进入前�
 
 - `openai-compatible-images`：OpenAI Images API 兼容形状。
 - `gemini-generate-content`：Gemini `generateContent` 形状。
+- `minimax-image-generation`：MiniMax `/v1/image_generation` 形状。
 
 当前 env 模板中的 provider：
 
@@ -34,7 +35,8 @@ API key 不写入 Git。`baseUrl`、`apiKeyEnv` 和 API key 都不得进入前�
 
 新增 provider 时必须先确认上游接口形状。Gemini `generateContent` 形状的模型应放入独立
 `gemini-generate-content` provider；不要放进 `openai-compatible-images` provider 下，除非上游
-明确包装成 OpenAI Images API 形状并经过实测。
+明确包装成 OpenAI Images API 形状并经过实测。MiniMax `/v1/image_generation` 形状的模型应放入
+独立 `minimax-image-generation` provider。
 
 ## OpenAI-Compatible 文生图
 
@@ -149,6 +151,57 @@ Endpoint 同文生图。请求 JSON：
 - 图片可能出现在 `inlineData` 或 REST JSON 的 `inline_data`。
 - 图片数据字段为 base64 `data`，MIME 字段为 `mimeType` 或 `mime_type`。
 - 如果只有文本没有图片，归一化为 `provider_response_invalid`。
+
+## MiniMax Image Generation 文生图
+
+Endpoint：
+
+```http
+POST /v1/image_generation
+Authorization: Bearer <apiKey>
+Content-Type: application/json
+```
+
+请求 JSON：
+
+```json
+{
+  "model": "image-01",
+  "prompt": "用户输入的提示词",
+  "response_format": "base64"
+}
+```
+
+响应解析：
+
+- `base_resp.status_code` 必须为 `0`。
+- 优先读取 `data.image_base64[0]` 作为图片 base64。
+- 如返回 `data.image_urls[0]`，后端下载图片并转为 base64 临时响应；该 URL 不写入 SQLite 或日志。
+
+## MiniMax Image Generation 参考图生图
+
+Endpoint 同文生图。请求 JSON：
+
+```json
+{
+  "model": "image-01",
+  "prompt": "用户输入的提示词",
+  "response_format": "base64",
+  "subject_reference": [
+    {
+      "type": "character",
+      "image_file": "data:image/png;base64,<base64-reference-image>"
+    }
+  ]
+}
+```
+
+说明：
+
+- MiniMax 参数第一版保持默认，只传 `model`、`prompt`、`response_format` 和可选
+  `subject_reference` 必要字段。
+- `subject_reference[].image_file` 使用参考图 Data URL。
+- `n` 暂不开放。
 
 ## 参数与 allowlist
 

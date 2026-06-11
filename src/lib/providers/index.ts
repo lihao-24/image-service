@@ -69,6 +69,17 @@ type GeminiGenerateContentResponse = {
   }>;
 };
 
+type MiniMaxImageGenerationResponse = {
+  base_resp?: {
+    status_code?: unknown;
+    status_msg?: unknown;
+  };
+  data?: {
+    image_base64?: unknown;
+    image_urls?: unknown;
+  };
+};
+
 export function createOpenAICompatibleImagesAdapter(
   options: OpenAICompatibleImagesAdapterOptions = {}
 ): ImagesProviderAdapter {
@@ -221,12 +232,80 @@ export function createGeminiGenerateContentAdapter(
   };
 }
 
+export function createMiniMaxImageGenerationAdapter(
+  options: OpenAICompatibleImagesAdapterOptions = {}
+): ImagesProviderAdapter {
+  const fetchClient = options.fetch ?? fetch;
+  const logger = options.logger ?? console;
+  const requestId = options.requestId ?? "img_untracked";
+
+  return {
+    async generateImage(provider, request) {
+      const endpoint = "/image_generation";
+      const response = await fetchClient(buildProviderUrl(provider, endpoint), {
+        method: "POST",
+        headers: buildBearerJsonHeaders(provider),
+        body: JSON.stringify(await buildMiniMaxImageGenerationBody(request))
+      });
+      const json = await readMiniMaxProviderJson(response, {
+        provider,
+        endpoint,
+        logger,
+        requestId
+      });
+
+      return {
+        ...(await normalizeMiniMaxImageResult(json as MiniMaxImageGenerationResponse, {
+          provider,
+          endpoint,
+          response,
+          logger,
+          requestId,
+          fetchClient
+        })),
+        raw: json
+      };
+    },
+
+    async editImage(provider, request) {
+      const endpoint = "/image_generation";
+      const response = await fetchClient(buildProviderUrl(provider, endpoint), {
+        method: "POST",
+        headers: buildBearerJsonHeaders(provider),
+        body: JSON.stringify(await buildMiniMaxImageGenerationBody(request))
+      });
+      const json = await readMiniMaxProviderJson(response, {
+        provider,
+        endpoint,
+        logger,
+        requestId
+      });
+
+      return {
+        ...(await normalizeMiniMaxImageResult(json as MiniMaxImageGenerationResponse, {
+          provider,
+          endpoint,
+          response,
+          logger,
+          requestId,
+          fetchClient
+        })),
+        raw: json
+      };
+    }
+  };
+}
+
 export function createImagesAdapterForProvider(
   provider: ProviderConfig,
   options: OpenAICompatibleImagesAdapterOptions = {}
 ): ImagesProviderAdapter {
   if (provider.type === "gemini-generate-content") {
     return createGeminiGenerateContentAdapter(options);
+  }
+
+  if (provider.type === "minimax-image-generation") {
+    return createMiniMaxImageGenerationAdapter(options);
   }
 
   return createOpenAICompatibleImagesAdapter(options);
@@ -258,10 +337,42 @@ async function readProviderJson(
   return json as ImagesApiResponse;
 }
 
+async function readMiniMaxProviderJson(
+  response: Response,
+  context: Omit<ProviderDiagnosticContext, "response">
+): Promise<MiniMaxImageGenerationResponse> {
+  let json: unknown;
+  const responseForJson = response.clone();
+
+  try {
+    json = await responseForJson.json();
+  } catch {
+    logProviderJsonParseFailed({ ...context, response }, await readBodyPreview(response));
+    throw new Error("provider_response_invalid");
+  }
+
+  if (!response.ok) {
+    logProviderErrorResponse(
+      { ...context, response },
+      toMiniMaxDiagnosticResponse(json as MiniMaxImageGenerationResponse)
+    );
+    throw new Error("provider_request_failed");
+  }
+
+  return json as MiniMaxImageGenerationResponse;
+}
+
 function buildImageRequestBody(request: GenerateImageRequest): Record<string, string> {
   return {
     model: request.model,
     prompt: request.prompt
+  };
+}
+
+function buildBearerJsonHeaders(provider: ProviderConfig): HeadersInit {
+  return {
+    authorization: `Bearer ${provider.apiKey}`,
+    "content-type": "application/json"
   };
 }
 
@@ -307,6 +418,57 @@ function normalizeGeminiImageResult(
   throw new Error("provider_response_invalid");
 }
 
+async function buildMiniMaxImageGenerationBody(
+  request: GenerateImageRequest | EditImageRequest
+): Promise<Record<string, unknown>> {
+  const body: Record<string, unknown> = {
+    model: request.model,
+    prompt: request.prompt,
+    response_format: "base64"
+  };
+
+  if ("image" in request) {
+    const mimeType = request.image.type || "application/octet-stream";
+    const imageBase64 = Buffer.from(await request.image.arrayBuffer()).toString("base64");
+
+    body.subject_reference = [
+      {
+        type: "character",
+        image_file: `data:${mimeType};base64,${imageBase64}`
+      }
+    ];
+  }
+
+  return body;
+}
+
+async function normalizeMiniMaxImageResult(
+  apiResponse: MiniMaxImageGenerationResponse,
+  context: ProviderDiagnosticContext & { fetchClient: typeof fetch }
+): Promise<Omit<ProviderImageResult, "raw">> {
+  const statusCode = apiResponse.base_resp?.status_code;
+
+  if (statusCode !== 0) {
+    logProviderErrorResponse(context, toMiniMaxDiagnosticResponse(apiResponse));
+    throw normalizeMiniMaxProviderError(statusCode);
+  }
+
+  const b64Json = extractMiniMaxB64Json(apiResponse);
+
+  if (b64Json) {
+    return { b64Json };
+  }
+
+  const imageUrl = extractMiniMaxImageUrl(apiResponse);
+
+  if (imageUrl) {
+    return fetchImageUrlAsBase64(imageUrl, context.fetchClient);
+  }
+
+  logInvalidProviderResponse(context, toMiniMaxDiagnosticResponse(apiResponse));
+  throw new Error("provider_response_invalid");
+}
+
 function normalizeProviderError(response: Response, json: ImagesApiResponse): Error {
   const code = typeof json.error?.code === "string" ? json.error.code : "";
   const type = typeof json.error?.type === "string" ? json.error.type : "";
@@ -331,6 +493,22 @@ function normalizeProviderError(response: Response, json: ImagesApiResponse): Er
     normalized.includes("rate limit")
   ) {
     return new Error("provider_rate_limited");
+  }
+
+  return new Error("provider_request_failed");
+}
+
+function normalizeMiniMaxProviderError(statusCode: unknown): Error {
+  if (statusCode === 1002) {
+    return new Error("provider_rate_limited");
+  }
+
+  if (statusCode === 1004 || statusCode === 2049) {
+    return new Error("provider_auth_failed");
+  }
+
+  if (statusCode === 1026) {
+    return new Error("provider_content_policy_violation");
   }
 
   return new Error("provider_request_failed");
@@ -387,6 +565,34 @@ function extractB64Json(response: ImagesApiResponse, index: number): string | un
 
 function extractImageUrl(response: ImagesApiResponse, index: number): string | undefined {
   const imageUrl = response.data?.[index]?.url;
+
+  if (typeof imageUrl !== "string" || imageUrl.length === 0) {
+    return undefined;
+  }
+
+  return imageUrl;
+}
+
+function extractMiniMaxB64Json(
+  response: MiniMaxImageGenerationResponse
+): string | undefined {
+  const image = Array.isArray(response.data?.image_base64)
+    ? response.data.image_base64[0]
+    : undefined;
+
+  if (typeof image !== "string" || image.length === 0) {
+    return undefined;
+  }
+
+  return image;
+}
+
+function extractMiniMaxImageUrl(
+  response: MiniMaxImageGenerationResponse
+): string | undefined {
+  const imageUrl = Array.isArray(response.data?.image_urls)
+    ? response.data.image_urls[0]
+    : undefined;
 
   if (typeof imageUrl !== "string" || imageUrl.length === 0) {
     return undefined;
@@ -478,6 +684,29 @@ function summarizeProviderResponse(apiResponse: unknown) {
       : [],
     errorCode: readDiagnosticString(response.error?.code),
     errorType: readDiagnosticString(response.error?.type)
+  };
+}
+
+function toMiniMaxDiagnosticResponse(
+  apiResponse: MiniMaxImageGenerationResponse
+): ImagesApiResponse {
+  return {
+    data: [
+      {
+        b64_json: extractMiniMaxB64Json(apiResponse),
+        url: extractMiniMaxImageUrl(apiResponse)
+      }
+    ],
+    error: {
+      code:
+        typeof apiResponse.base_resp?.status_code === "number"
+          ? String(apiResponse.base_resp.status_code)
+          : undefined,
+      message:
+        typeof apiResponse.base_resp?.status_msg === "string"
+          ? apiResponse.base_resp.status_msg
+          : undefined
+    }
   };
 }
 
