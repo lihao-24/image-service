@@ -261,6 +261,75 @@ describe("parseImageServiceConfig", () => {
     });
   });
 
+  it("解析 MiniMax image_generation provider 配置并在公开配置中隐藏密钥字段", () => {
+    const env = {
+      MINIMAX_API_KEY: "minimax-secret-key",
+      IMAGE_DEFAULT_PROVIDER: "minimax",
+      IMAGE_DEFAULT_MODEL: "image-01",
+      IMAGE_PROVIDER_OPTIONS: JSON.stringify([
+        {
+          id: "minimax",
+          label: "MiniMax",
+          type: "minimax-image-generation",
+          baseUrl: "https://api.minimaxi.com/v1",
+          apiKeyEnv: "MINIMAX_API_KEY",
+          models: [
+            {
+              id: "image-01",
+              label: "MiniMax Image 01",
+              family: "minimax",
+              enabled: true,
+              supportsTextToImage: true,
+              supportsImageToImage: true
+            }
+          ]
+        }
+      ])
+    };
+
+    const serverConfig = parseImageServiceConfig(env);
+
+    expect(serverConfig.providers[0]).toMatchObject({
+      id: "minimax",
+      type: "minimax-image-generation",
+      baseUrl: "https://api.minimaxi.com/v1",
+      apiKeyEnv: "MINIMAX_API_KEY",
+      apiKey: "minimax-secret-key",
+      models: [
+        {
+          id: "image-01",
+          label: "MiniMax Image 01",
+          family: "minimax",
+          enabled: true,
+          supportsTextToImage: true,
+          supportsImageToImage: true
+        }
+      ]
+    });
+
+    const publicConfig = getPublicImageConfig(env);
+
+    expect(publicConfig.providers).toEqual([
+      {
+        id: "minimax",
+        label: "MiniMax",
+        models: [
+          {
+            id: "image-01",
+            label: "MiniMax Image 01",
+            family: "minimax",
+            supportsTextToImage: true,
+            supportsImageToImage: true
+          }
+        ]
+      }
+    ]);
+    expect(JSON.stringify(publicConfig)).not.toContain("minimax-secret-key");
+    expect(JSON.stringify(publicConfig)).not.toContain("apiKey");
+    expect(JSON.stringify(publicConfig)).not.toContain("apiKeyEnv");
+    expect(JSON.stringify(publicConfig)).not.toContain("baseUrl");
+  });
+
   it("拒绝默认 provider 不在 provider allowlist 中的配置", () => {
     expect(() =>
       parseImageServiceConfig({

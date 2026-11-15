@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   createGeminiGenerateContentAdapter,
+  createMiniMaxImageGenerationAdapter,
   createOpenAICompatibleImagesAdapter,
   type ProviderConfig
 } from "@/lib/providers";
@@ -17,6 +18,25 @@ const provider: ProviderConfig = {
       id: "gpt-image-2",
       label: "GPT Image 2",
       family: "chatgpt",
+      enabled: true,
+      supportsTextToImage: true,
+      supportsImageToImage: true
+    }
+  ]
+};
+
+const minimaxProvider: ProviderConfig = {
+  id: "minimax",
+  label: "MiniMax",
+  type: "minimax-image-generation",
+  baseUrl: "https://api.minimaxi.com/v1",
+  apiKeyEnv: "MINIMAX_API_KEY",
+  apiKey: "minimax-key",
+  models: [
+    {
+      id: "image-01",
+      label: "MiniMax Image 01",
+      family: "minimax",
       enabled: true,
       supportsTextToImage: true,
       supportsImageToImage: true
@@ -345,5 +365,141 @@ describe("createOpenAICompatibleImagesAdapter", () => {
         }
       }
     );
+  });
+});
+
+describe("createMiniMaxImageGenerationAdapter", () => {
+  it("文生图请求发送 MiniMax 必要 JSON 参数", async () => {
+    const fetchMock = vi.fn(async () => new Response(
+      JSON.stringify({
+        base_resp: { status_code: 0, status_msg: "success" },
+        data: { image_base64: ["minimax-image"] }
+      }),
+      { status: 200, headers: { "content-type": "application/json" } }
+    ));
+    const adapter = createMiniMaxImageGenerationAdapter({ fetch: fetchMock });
+
+    const result = await adapter.generateImage(minimaxProvider, {
+      model: "image-01",
+      prompt: "一只玻璃茶杯"
+    });
+
+    expect(result.b64Json).toBe("minimax-image");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const calls = fetchMock.mock.calls as unknown[][];
+    expect(calls[0]?.[0]).toBe("https://api.minimaxi.com/v1/image_generation");
+    expect((calls[0]?.[1] as RequestInit).headers).toEqual({
+      authorization: "Bearer minimax-key",
+      "content-type": "application/json"
+    });
+    expect(JSON.parse(String((calls[0]?.[1] as RequestInit).body))).toEqual({
+      model: "image-01",
+      prompt: "一只玻璃茶杯",
+      response_format: "base64"
+    });
+  });
+
+  it("图生图请求把单张参考图转成 subject_reference Data URL", async () => {
+    const fetchMock = vi.fn(async () => new Response(
+      JSON.stringify({
+        base_resp: { status_code: 0 },
+        data: { image_base64: ["edited-minimax-image"] }
+      }),
+      { status: 200, headers: { "content-type": "application/json" } }
+    ));
+    const adapter = createMiniMaxImageGenerationAdapter({ fetch: fetchMock });
+
+    const result = await adapter.editImage(minimaxProvider, {
+      model: "image-01",
+      prompt: "保持角色，换成暖色背景",
+      image: new Blob(["fake-image"], { type: "image/png" }),
+      imageFilename: "reference.png"
+    });
+
+    expect(result.b64Json).toBe("edited-minimax-image");
+    const calls = fetchMock.mock.calls as unknown[][];
+    expect(JSON.parse(String((calls[0]?.[1] as RequestInit).body))).toEqual({
+      model: "image-01",
+      prompt: "保持角色，换成暖色背景",
+      response_format: "base64",
+      subject_reference: [
+        {
+          type: "character",
+          image_file: `data:image/png;base64,${Buffer.from("fake-image").toString("base64")}`
+        }
+      ]
+    });
+  });
+
+  it("MiniMax 返回图片 URL 时归一化为 b64Json", async () => {
+    const fetchMock = vi.fn(async (input) => {
+      if (String(input) === "https://cdn.example.test/minimax.png") {
+        return new Response(new Uint8Array([4, 5, 6]), {
+          status: 200,
+          headers: { "content-type": "image/png" }
+        });
+      }
+
+      return new Response(
+        JSON.stringify({
+          base_resp: { status_code: 0 },
+          data: { image_urls: ["https://cdn.example.test/minimax.png"] }
+        }),
+        { status: 200, headers: { "content-type": "application/json" } }
+      );
+    });
+    const adapter = createMiniMaxImageGenerationAdapter({ fetch: fetchMock });
+
+    await expect(
+      adapter.generateImage(minimaxProvider, {
+        model: "image-01",
+        prompt: "一只玻璃茶杯"
+      })
+    ).resolves.toMatchObject({
+      b64Json: Buffer.from(new Uint8Array([4, 5, 6])).toString("base64"),
+      mimeType: "image/png",
+      outputFormat: "png"
+    });
+  });
+
+  it.each([
+    [1002, "provider_rate_limited"],
+    [1004, "provider_auth_failed"],
+    [2049, "provider_auth_failed"],
+    [1026, "provider_content_policy_violation"],
+    [2013, "provider_request_failed"],
+    [9999, "provider_request_failed"]
+  ])("MiniMax 错误码 %s 映射为 %s", async (statusCode, expectedError) => {
+    const fetchMock = vi.fn(async () => new Response(
+      JSON.stringify({
+        base_resp: { status_code: statusCode, status_msg: "failed" }
+      }),
+      { status: 200, headers: { "content-type": "application/json" } }
+    ));
+    const adapter = createMiniMaxImageGenerationAdapter({ fetch: fetchMock });
+
+    await expect(
+      adapter.generateImage(minimaxProvider, {
+        model: "image-01",
+        prompt: "测试"
+      })
+    ).rejects.toThrow(expectedError);
+  });
+
+  it.each([500, 401])("MiniMax HTTP 非 2xx %s 映射为 provider_request_failed", async (status) => {
+    const fetchMock = vi.fn(async () => new Response(
+      JSON.stringify({
+        base_resp: { status_code: 0 }
+      }),
+      { status, headers: { "content-type": "application/json" } }
+    ));
+    const adapter = createMiniMaxImageGenerationAdapter({ fetch: fetchMock });
+
+    await expect(
+      adapter.generateImage(minimaxProvider, {
+        model: "image-01",
+        prompt: "测试"
+      })
+    ).rejects.toThrow("provider_request_failed");
   });
 });

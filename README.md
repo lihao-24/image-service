@@ -41,7 +41,7 @@ provider 的 `id` 是稳定配置值，`label` 是界面展示名；两者不要
 文生图/参考图生图能力。公开接口 `/api/image-options` 只返回默认 provider/model 和
 provider/model 的公开字段，不包含 `baseUrl`、`apiKeyEnv` 或 API key。
 
-当前支持两类 provider type：
+当前支持三类 provider type：
 
 - `openai-compatible-images`：用于 OpenAI Images API 兼容接口。文生图请求发到
   `{baseUrl}/images/generations`，请求体只包含 `model` 和 `prompt`；参考图生图发到
@@ -51,6 +51,9 @@ provider/model 的公开字段，不包含 `baseUrl`、`apiKeyEnv` 或 API key�
   `{baseUrl}/models/{model}:generateContent`，文生图使用 `contents.parts[].text`，参考图生图
   额外提交 `inline_data` 图片。FastCode Gemini 当前使用 `authStyle: "api-key-header"`，
   即 `x-goog-api-key`。
+- `minimax-image-generation`：用于 MiniMax `/v1/image_generation` 接口。文生图发送
+  `model`、`prompt`、`response_format=base64`；参考图生图额外发送 `subject_reference`
+  Data URL。认证使用 `Authorization: Bearer <apiKey>`。
 
 当前 env 模板包含三个 provider：
 
@@ -65,10 +68,14 @@ provider/model 的公开字段，不包含 `baseUrl`、`apiKeyEnv` 或 API key�
   `apiKeyEnv` 为 `FASTCODE_API_KEY`，`authStyle` 为 `api-key-header`。当前模型为
   `gemini-3.1-flash-image-preview`，展示名 `Gemini 3.1 Flash`，支持文生图和参考图生图。
 
+MiniMax 当前不在 env 模板默认 provider 列表中启用；如需使用，可新增
+`type: "minimax-image-generation"` provider，并配置 `apiKeyEnv: "MINIMAX_API_KEY"`。
+
 新增供应商时，优先复制同类 provider 的结构，并确认上游真实接口形状后再选择 `type`：
 
 - 兼容 OpenAI Images API 的上游放在独立 `openai-compatible-images` provider 下。
 - Gemini `generateContent` 形状的上游放在独立 `gemini-generate-content` provider 下。
+- MiniMax `/v1/image_generation` 形状的上游放在独立 `minimax-image-generation` provider 下。
 - 不要把 Gemini 模型塞进 `openai-compatible-images` provider 下，除非上游明确把该模型包装成
   OpenAI Images API 形状并完成实测。
 - 每个新模型都要配置 `family`、`enabled`、`supportsTextToImage` 和
@@ -144,7 +151,7 @@ https://image.lihao66.top
 cp env/image-service.production.env.example .env.production
 ```
 
-然后填入真实 `NEXT_PUBLIC_SUPABASE_ANON_KEY`、`SUB2API_API_KEY`、`FASTCODE_API_KEY`
+然后填入真实 `NEXT_PUBLIC_SUPABASE_ANON_KEY`、`SUB2API_API_KEY`、`FASTCODE_API_KEY`、`MINIMAX_API_KEY`
 等值。不要提交 `.env.production`。
 
 上线前重点核对 `.env.production`：
@@ -154,8 +161,8 @@ cp env/image-service.production.env.example .env.production
   service role key。
 - `IMAGE_DEFAULT_PROVIDER` 和 `IMAGE_DEFAULT_MODEL` 指向 `IMAGE_PROVIDER_OPTIONS` 中已启用
   的 provider/model；默认仍建议保持 `toioto / gpt-image-2`，新 provider 稳定后再单独切换。
-- `IMAGE_PROVIDER_OPTIONS` 是合法单行 JSON。OpenAI-compatible provider 与 Gemini
-  generateContent provider 分开配置；Gemini 不放进 `fastcode` 这类
+- `IMAGE_PROVIDER_OPTIONS` 是合法单行 JSON。OpenAI-compatible、Gemini generateContent
+  和 MiniMax image_generation provider 分开配置；Gemini 不放进 `fastcode` 这类
   `openai-compatible-images` provider 下。
 - 每个 provider 的 `apiKeyEnv` 都有对应真实环境变量；模板里的空字符串占位要在生产环境补齐。
 - `IMAGE_SERVICE_SQLITE_PATH` 指向容器内 `/data/sqlite/image-service.sqlite`，并由 compose volume

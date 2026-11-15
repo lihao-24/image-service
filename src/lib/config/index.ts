@@ -4,9 +4,12 @@ export type PublicProviderConfig = {
   models: PublicProviderModelConfig[];
 };
 
-export type ImageModelFamily = "chatgpt" | "gemini";
+export type ImageModelFamily = "chatgpt" | "gemini" | "minimax";
 
-export type ProviderType = "openai-compatible-images" | "gemini-generate-content";
+export type ProviderType =
+  | "openai-compatible-images"
+  | "gemini-generate-content"
+  | "minimax-image-generation";
 
 export type ImageProviderAuthStyle = "bearer" | "api-key-header" | "query-key";
 
@@ -434,7 +437,11 @@ function assertDefaultConfigIsAllowed(config: ImageServiceConfig) {
 function readProviderType(value: unknown, fieldName: string): ProviderType {
   const type = readRequiredString(value, fieldName);
 
-  if (type !== "openai-compatible-images" && type !== "gemini-generate-content") {
+  if (
+    type !== "openai-compatible-images" &&
+    type !== "gemini-generate-content" &&
+    type !== "minimax-image-generation"
+  ) {
     throw new Error(`${fieldName} 不受支持。`);
   }
 
@@ -444,7 +451,7 @@ function readProviderType(value: unknown, fieldName: string): ProviderType {
 function readModelFamily(value: unknown, fieldName: string): ImageModelFamily {
   const family = readRequiredString(value, fieldName);
 
-  if (family !== "chatgpt" && family !== "gemini") {
+  if (family !== "chatgpt" && family !== "gemini" && family !== "minimax") {
     throw new Error(`${fieldName} 不受支持。`);
   }
 
