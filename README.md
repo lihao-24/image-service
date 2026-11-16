@@ -1,20 +1,70 @@
-# image-service
+# Focal · image-service
 
-`image-service`（品牌名 Focal）是个人 AI 服务体系中的生图网页服务。
+个人 AI 生图工作台：在统一界面中选择供应商和模型，完成文生图、参考图生图，并复用 Prompt 模板与配方。
 
-当前已创建 Next.js 应用骨架、登录边界、SQLite 数据层、provider allowlist、
-OpenAI 兼容 Images API adapter、生成 API、Prompt 配方保存 API、Prompt 模板库、
-用量统计和登录后的中文聊天式生图工作台。
-测试使用 mock provider，不调用真实 provider。
+服务端适配 OpenAI-compatible Images、Gemini generateContent 和 MiniMax image_generation 三类接口，提供登录保护、按用户隔离的数据访问、成功用量统计和失败诊断。
+
+**Next.js · React · TypeScript · SQLite · Supabase Auth · Vitest**
+
+[本地开发](#本地开发) · [常用验证](#常用验证) · [文档索引](docs/README.md) · [接口适配说明](docs/reference/openai-compatible-images-api.md)
+
+## 一次使用流程
+
+以制作一张商品展示图为例：
+
+1. 登录工作台，选择可用的供应商和模型。
+2. 输入 Prompt，或从模板库选取模板；需要参考图时添加图片。
+3. 提交生成请求，在对话区查看临时预览并下载图片。
+4. 如果想复用当前 Prompt 和配置，手动保存为配方。
+
+生成图片只保留在当前浏览器状态中，刷新后不会从服务器恢复，需要及时下载。保存配方只保存 Prompt 和配置，不保存图片本体。
+
+## 三个设计取舍
+
+| 取舍 | 原因与边界 | 实现入口 |
+| --- | --- | --- |
+| 不同接口协议使用不同适配器 | 上层使用统一的生成/编辑接口，协议差异在适配器内处理；是否支持参考图由模型能力配置决定 | [Provider 实现](src/lib/providers/index.ts)、[服务端配置](src/lib/config/index.ts) |
+| 图片临时返回，配方由用户主动保存 | 控制服务端存储范围；用户需自行下载结果，配方保存与生成请求独立 | [临时响应](src/lib/images/index.ts)、[配方模块](src/lib/recipes/index.ts)、[存储策略](docs/reference/data-and-storage.md) |
+| 用量与失败信息分开记录 | 成功生成后递增用量；失败保留错误分类和耗时，并通过 requestId 关联诊断日志 | [生成路由](src/app/api/images/generations/route.ts)、[用量模块](src/lib/usage/index.ts)、[诊断日志](src/lib/diagnostics/image-logs.ts) |
+
+```mermaid
+flowchart LR
+    A[Prompt 与可选参考图] --> B[身份与参数校验]
+    B --> C[Provider 适配器]
+    C --> D[图片模型服务]
+    D --> E[临时预览与下载]
+    C --> F[用量与生成日志]
+```
+
+## 阅读与验证入口
+
+- 主流程：[工作台](src/app/image-workbench.tsx)、[文生图 API](src/app/api/images/generations/route.ts)、[参考图 API](src/app/api/images/edits/route.ts)。
+- 异常与计数：[生成路由测试](tests/api/text-to-image-route.test.ts)，覆盖未登录、非法参数、上游失败、空图片和成功用量统计。
+- 数据与配置：[SQLite 数据层测试](tests/db/sqlite-data-layer.test.ts)、[公开配置测试](tests/config/public-config.test.ts)、[Provider 测试](tests/providers/openai-compatible-images.test.ts)。
+
+自动化测试使用 mock provider，不调用真实图片模型；真实供应商可用性与图片质量需要单独验证。当前 GPT Image 系列统计成功用量，但不执行每日额度拦截。服务需要自己的 Supabase Auth 与模型服务配置。
 
 ## 本地开发
 
-```bash
-pnpm install
-pnpm dev
-```
+建议使用 Node.js 24 和 pnpm 10.32.1，与仓库 Dockerfile 保持一致；SQLite 使用 Node.js 内置的 `node:sqlite`。
 
-常用验证命令：
+1. 安装依赖：
+
+   ```bash
+   pnpm install --frozen-lockfile
+   ```
+
+2. 将 [.env.example](.env.example) 复制为 `.env.local`，填写自己的 Supabase URL、anon key 和启用供应商对应的 API Key。按需调整 provider/model allowlist，并将 `IMAGE_SERVICE_SQLITE_PATH` 设置为本地开发路径，例如 `./data/sqlite/image-service.sqlite`。
+
+3. 启动应用：
+
+   ```bash
+   pnpm dev
+   ```
+
+默认打开 [http://localhost:3000](http://localhost:3000)。开发服务器使用 Next.js 默认端口；生产容器的 `3010` 映射见下方部署参考。真实密钥和运行数据不要提交到仓库。
+
+## 常用验证
 
 ```bash
 pnpm lint
@@ -23,6 +73,9 @@ pnpm test
 pnpm build
 git diff --check
 ```
+
+<details>
+<summary>展开认证、Provider 配置与 API 参考</summary>
 
 ## Supabase Auth
 
@@ -132,6 +185,11 @@ allowlist，支持文生图、参考图生图、Prompt 模板浏览和收藏、�
 - 第一版不保存生成图片本体。
 - 不保存上传参考图文件。
 - `user_id` 只能来自服务端校验后的 Supabase Auth 用户。
+
+</details>
+
+<details>
+<summary>展开生产部署、排障与维护说明</summary>
 
 ## 生产部署
 
@@ -291,3 +349,5 @@ docker compose --env-file .env.production -f compose/prod/image-service.prod.com
 - `docs/specs/2026-05-19-gpt-image-2-and-usage-hardening-design.md`：gpt-image-2 和用量加固设计。
 - `docs/reference/openai-compatible-images-api.md`：当前 provider 和图片接口调用约束。
 - `docs/reference/data-and-storage.md`：数据和存储约束。
+
+</details>
