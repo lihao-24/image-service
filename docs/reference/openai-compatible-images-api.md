@@ -4,6 +4,13 @@
 provider、model、prompt 和可选参考图；尺寸、质量、输出格式、背景、moderation 等旧参数不再作为
 主流程参数发送给上游。
 
+## 浏览器图片交付
+
+provider adapter 统一产出内存 base64，CDN 上传由两个生图路由在其后执行，详见
+`../../README.md` 的“七牛 CDN 图片交付”。未配置七牛或上传失败/超时时，响应仍为
+`image.b64_json`、`image.output_format`；上传成功则返回 `image.url`、`image.download_url`、
+`image.output_format`，不包含 base64。两种模式保持原有 `meta` 和用量统计。
+
 ## Provider 配置
 
 服务端通过 `IMAGE_PROVIDER_OPTIONS` 配置 provider -> models 二级 JSON，并通过
@@ -89,7 +96,7 @@ const b64 = imageItem.b64_json
 说明：
 
 - OpenAI-compatible provider 可以返回 `b64_json` 或 `url`。返回 `url` 时，后端会下载图片并转为
-  base64 临时响应；该 URL 不写入 SQLite 或日志。
+  内存 base64 结果，再由生图路由决定 base64/CDN 交付；上游 URL 不写入 SQLite 或日志。
 - `data[0]` 通常是原图。
 - `data[1]` 通常是修改后的图。
 - 后端应优先使用 `data[1]`。
@@ -176,7 +183,7 @@ Content-Type: application/json
 
 - `base_resp.status_code` 必须为 `0`。
 - 优先读取 `data.image_base64[0]` 作为图片 base64。
-- 如返回 `data.image_urls[0]`，后端下载图片并转为 base64 临时响应；该 URL 不写入 SQLite 或日志。
+- 如返回 `data.image_urls[0]`，后端下载图片并转为 内存 base64 结果，再由生图路由决定 base64/CDN 交付；上游 URL 不写入 SQLite 或日志。
 
 ## MiniMax Image Generation 参考图生图
 

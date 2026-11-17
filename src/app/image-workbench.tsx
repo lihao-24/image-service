@@ -33,6 +33,8 @@ type ImageWorkbenchProps = {
 
 type GenerateResponse = {
   image?: {
+    url?: string;
+    download_url?: string;
     b64_json?: string;
     output_format?: string;
   };
@@ -310,9 +312,10 @@ export default function ImageWorkbench({ config, userLabel }: ImageWorkbenchProp
       }
 
       const b64Json = payload.image?.b64_json?.trim();
+      const imageUrl = payload.image?.url?.trim();
       const format = payload.image?.output_format || "png";
 
-      if (!b64Json) {
+      if (!imageUrl && !b64Json) {
         throw new Error(SAFE_PROVIDER_ERROR_MESSAGE);
       }
 
@@ -320,7 +323,8 @@ export default function ImageWorkbench({ config, userLabel }: ImageWorkbenchProp
         ...loadingMessage,
         status: "success",
         image: {
-          src: `data:image/${format};base64,${b64Json}`,
+          src: imageUrl || `data:image/${format};base64,${b64Json}`,
+          downloadSrc: imageUrl ? payload.image?.download_url || imageUrl : undefined,
           outputFormat: format,
           filename: `focal-preview.${format === "jpeg" ? "jpg" : format}`
         }

@@ -17,6 +17,7 @@ import {
   INVALID_GENERATION_PARAMS,
   validateReferenceImageFormData
 } from "@/lib/images";
+import { uploadTemporaryImage } from "@/lib/images/qiniu";
 import { createImagesAdapterForProvider } from "@/lib/providers";
 import {
   checkDailyQuota,
@@ -200,18 +201,21 @@ export async function POST(request: NextRequest | Request) {
       hasReferenceImage: true
     });
 
-    return NextResponse.json(
-      createTemporaryImageResponse(
-        result.b64Json,
-        paramsResult.params,
-        {
-          generationCount,
-          limit: quotaLimited ? dailyLimit : null,
-          limited: quotaLimited
-        },
-        { mode: IMAGE_EDIT_MODE, outputFormat: result.outputFormat ?? "auto" }
-      )
+    const cloudImage = await uploadTemporaryImage(result, {
+      requestId,
+      providerId: paramsResult.params.provider
+    });
+    const response = createTemporaryImageResponse(
+      result.b64Json,
+      paramsResult.params,
+      {
+        generationCount,
+        limit: quotaLimited ? dailyLimit : null,
+        limited: quotaLimited
+      },
+      { mode: IMAGE_EDIT_MODE, outputFormat: result.outputFormat ?? "auto" }
     );
+    return NextResponse.json({ ...response, image: cloudImage ?? response.image });
   } finally {
     closeDatabase(db);
   }

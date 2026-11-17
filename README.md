@@ -121,15 +121,57 @@ provider、model、mode、status、error_code、duration_ms 以及旧参数兼�
 登录后访问 `/` 会进入聊天式生图工作台。页面参数控件来自 `/api/image-options` 的公开
 allowlist，支持文生图、参考图生图、Prompt 模板浏览和收藏、用量查看、临时预览、
 下载当前临时图片和手动保存配置。
-生成成功不会自动保存 Prompt 配方；生成图片 base64 只保留在当前浏览器状态中，不写入
-`localStorage`、SQLite、服务器磁盘或日志。
+生成成功不会自动保存 Prompt 配方。未配置七牛时，图片 base64 只保留在当前浏览器状态中；
+配置七牛后，图片临时上传云端，浏览器直接从 CDN 加载。图片和签名 URL 不写入
+`localStorage`、SQLite、服务器磁盘或应用日志。刷新页面不会恢复图片历史。
+
+## 七牛 CDN 图片交付（可选）
+
+用于绕开 VPS 的图片下行带宽限制。无需界面开关或数据库迁移；只在运行环境同时配置以下两个
+服务端变量时自动启用，任意一个为空都沿用原 base64 响应：
+
+```dotenv
+QINIU_ACCESS_KEY="你的七牛 AccessKey"
+QINIU_SECRET_KEY="你的七牛 SecretKey"
+```
+
+本地填写项目根目录 `.env.local`，生产填写 `.env.production`，修改后重启对应服务。
+不要加 `NEXT_PUBLIC_` 前缀，不要提交真实值。生产 Compose 已通过 `env_file` 读取该文件。
+
+- 官方 `qiniu` SDK 使用 HTTPS 上传到既有华南（z2）私有桶 `lihao66`；不使用 S3 endpoint。
+  `next.config.ts` 将 SDK 设为 `serverExternalPackages`，由 Node 服务端运行时加载并随 standalone 产物交付。
+- 文生图和参考图生图都在 provider 成功后上传结果；不上传用户参考图，不改变 provider 调用。
+- 文件 key 为 `focal/{UTC yyyy-MM-dd}/{uuid}.{ext}`，从图片字节识别 PNG/JPEG/WebP/GIF。
+- 成功返回 `image.url`、`image.download_url` 和 `image.output_format`，**不返回 `b64_json`**。
+  展示/放大直接使用 CDN；附件下载链接将 `attname` 纳入签名，不走 VPS 代理或依赖浏览器 CORS 下载。
+- 域名固定为 `https://img.lihao66.top`，私有签名有效期 48 小时。已有桶生命周期规则在一天后清理文件；
+  签名不延长源文件寿命，源文件删除也不意味着 CDN 缓存在同一时刻失效。
+- 上传失败、格式无法识别或上传总等待超过 10 秒，回退原 base64 响应，成功用量保持正常统计。
+  SDK 网络请求也设超时且不重试。应用只记录 `[image-service] CDN upload fallback`、requestId、
+  providerId 和安全错误类别，不记录原始 SDK 错误、密钥、图片或签名 URL。
+- 不新增图片历史、设置表、清理任务或七牛资源。需要撤回启用时清空密钥并重启服务即可。
+
+本地自动验证（只 mock 上传网络和生图 provider，不消耗真实生图额度、不上传云端）：
+
+```bash
+pnpm test tests/images/qiniu-delivery.test.ts tests/api/text-to-image-route.test.ts tests/api/reference-image-route.test.ts tests/app/image-workbench.test.tsx
+pnpm lint
+pnpm typecheck
+pnpm test
+pnpm build
+```
+
+真实环境验收：配置密钥并运行 `pnpm dev`，登录后分别测试文生图和参考图生图。在浏览器 Network
+中确认生成 API 的 JSON 只有 URL、没有 base64，图片 GET 的目标为 `img.lihao66.top`；检查放大预览及
+下载附件。清空两个密钥并重启后，确认恢复 base64 展示。真实云端验收需单独执行，mock 通过不代表
+七牛凭据权限、CDN 私有鉴权或实际带宽已验证。不要公开包含签名 URL 的 HAR/截图。
 
 ## 安全边界
 
 - 不提交真实 `.env`、API key、数据库文件、上传文件或生成图片。
 - `.env.example` 只包含变量名和占位说明。
 - `env/*.env.example` 只保存部署模板；真实 `.env.production` 和 `.env.local` 不提交。
-- 第一版不保存生成图片本体。
+- 默认不保存生成图片本体；配置七牛后仅将结果临时上传既有私有桶，由桶生命周期清理。
 - 不保存上传参考图文件。
 - `user_id` 只能来自服务端校验后的 Supabase Auth 用户。
 

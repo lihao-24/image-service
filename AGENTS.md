@@ -30,7 +30,7 @@
 - `src/lib/auth/`：Supabase Auth、cookie session、用户校验和中间件。
 - `src/lib/config/`：服务端图片配置解析、provider allowlist、公开配置投影和参数校验。
 - `src/lib/db/`：SQLite 连接、schema、按用户隔离的数据访问 helper。
-- `src/lib/images/`：图片请求体校验、参考图校验、临时图片响应。
+- `src/lib/images/`：图片请求体校验、参考图校验、临时图片响应和服务端七牛 CDN 交付。
 - `src/lib/providers/`：图片 provider adapter 接口、OpenAI 兼容 Images API 实现和 Gemini generateContent 实现。
 - `src/lib/usage/`：每日额度、用量统计和生成日志。
 - `src/lib/recipes/`：Prompt 配方校验和按用户隔离的 CRUD helper。
@@ -46,7 +46,8 @@
 - 新增或修改图片 provider 时，优先从 `src/lib/config/` 和 `src/lib/providers/` 入手，并补对应测试。
 - API route 中的用户身份只能来自 `src/lib/auth/` 校验后的 Supabase user，不接受客户端传入的 `user_id`。
 - 数据读写优先走 `src/lib/db/`、`src/lib/recipes/`、`src/lib/usage/` 的既有 helper，不在 UI 或 route 中散落 SQL。
-- 生成图片本体当前只作为临时响应返回，不写入 SQLite、服务器磁盘、日志或 localStorage。
+- 默认生成图片只作为 base64 临时响应返回；同时配置 QINIU_ACCESS_KEY / QINIU_SECRET_KEY 后，通过服务端七牛 helper 上传既有私有桶，成功只返回 CDN URL，失败或超时回退 base64。图片本体和签名 URL 不写入 SQLite、服务器磁盘、应用日志或 localStorage。
+- 七牛密钥与 SDK 仅限服务端路由链路，不得导入客户端组件；不修改 provider 抽象或将 CDN 配置暴露到公开配置接口。
 - 上传参考图当前只用于本次请求和浏览器临时预览，不持久化文件。
 - Prompt 模板渲染优先走 `src/lib/prompt-templates/render.ts`，不要在组件或 route 中重复拼接模板逻辑。
 - `src/app/image-workbench.tsx` 是工作台主状态和流程编排文件；工作台 UI 改动优先复用 `src/app/workbench/` 下的拆分组件、类型和 helper，避免把新状态和业务逻辑继续堆进单个文件。

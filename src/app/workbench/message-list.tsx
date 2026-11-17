@@ -61,7 +61,7 @@ export function MessageList({
           今天想生成什么？
         </h1>
         <p className="mt-3 max-w-xl text-base leading-7 text-slate-500">
-          直接描述画面，或从一个模板开始。生成结果只保留在当前会话中。
+          直接描述画面，或从一个模板开始。图片仅供临时预览，请及时下载保存。
         </p>
         <div className="mt-8 grid w-full max-w-2xl gap-3 sm:grid-cols-3">
           <button
@@ -298,7 +298,7 @@ function AssistantMessage({
           aria-label="下载"
           className="grid h-10 w-10 place-items-center rounded-lg border border-slate-200 bg-white text-slate-700 transition hover:bg-slate-50 active:bg-slate-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-600"
           download={message.image?.filename}
-          href={message.image?.src ?? "#"}
+          href={message.image?.downloadSrc ?? message.image?.src ?? "#"}
         >
           <DownloadIcon />
         </a>

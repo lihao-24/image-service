@@ -404,6 +404,23 @@ describe("ImageWorkbench chat canvas", () => {
     });
   });
 
+  it.each([undefined, tinyPng])("CDN URL 优先展示、预览并使用独立附件链接下载 (%s)", async (base64) => {
+    const url = "https://img.lihao66.top/focal/test.png?e=123&token=preview";
+    const downloadUrl = "https://img.lihao66.top/focal/test.png?attname=focal-preview.png&e=123&token=download";
+    mockFetchByRoute({ generationResponse: Promise.resolve(jsonResponse({
+      image: { url, download_url: downloadUrl, b64_json: base64, output_format: "png" }
+    })) });
+    renderWorkbench();
+    fireEvent.change(screen.getByLabelText("Prompt"), { target: { value: "CDN 测试图片" } });
+    fireEvent.click(screen.getByRole("button", { name: "生成图片" }));
+    const image = await screen.findByRole("img", { name: "AI 生成图片" });
+    expect(image.getAttribute("src")).toBe(url);
+    expect(screen.getByRole("link", { name: "下载" }).getAttribute("href")).toBe(downloadUrl);
+    fireEvent.click(image);
+    const dialog = screen.getByRole("dialog", { name: "图片预览" });
+    expect(within(dialog).getByRole("img", { name: "AI 生成图片预览" }).getAttribute("src")).toBe(url);
+  });
+
   it("点击聊天图片后打开大图预览并可关闭", async () => {
     mockFetchByRoute();
 

@@ -1,7 +1,9 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  output: "standalone"
+  output: "standalone",
+  // Keep the Node SDK's optional transport dependencies out of Turbopack bundling.
+  serverExternalPackages: ["qiniu"]
 };
 
 export default nextConfig;

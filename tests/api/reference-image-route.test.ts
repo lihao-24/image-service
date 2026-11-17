@@ -22,6 +22,10 @@ vi.mock("@/lib/providers", async (importOriginal) => {
   };
 });
 
+vi.mock("@/lib/images/qiniu", () => ({
+  uploadTemporaryImage: vi.fn().mockResolvedValue(null)
+}));
+
 vi.mock("@/lib/usage", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/usage")>();
   return {
@@ -35,6 +39,7 @@ const { openDatabase } = await import("@/lib/db");
 const { getDailyUsage, listGenerationLogs } = await import("@/lib/db");
 const { createImagesAdapterForProvider } = await import("@/lib/providers");
 const { checkDailyQuota, getUsageDate } = await import("@/lib/usage");
+const { uploadTemporaryImage } = await import("@/lib/images/qiniu");
 const { POST } = await import("@/app/api/images/edits/route");
 const actualDb = await vi.importActual<typeof import("@/lib/db")>("@/lib/db");
 const actualUsage = await vi.importActual<typeof import("@/lib/usage")>("@/lib/usage");
@@ -96,11 +101,35 @@ function mockUser(userId = "user-w08") {
 describe("POST /api/images/edits", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(uploadTemporaryImage).mockResolvedValue(null);
     process.env.SUB2API_API_KEY = "test-key";
     process.env.IMAGE_DAILY_LIMIT = "20";
     currentDb = actualDb.openDatabase(":memory:");
     actualDb.initializeDatabase(currentDb);
     mockOpenDatabase.mockReturnValue(currentDb);
+  });
+
+  it("CDN 上传成功只返回 URL，仍正常统计成功用量", async () => {
+    mockUser();
+    mockCreateAdapter.mockReturnValue({ editImage: vi.fn().mockResolvedValue({
+      b64Json: "base64-image", outputFormat: "png", raw: {}
+    }) });
+    const image = {
+      url: "https://img.lihao66.top/focal/test.png?e=123&token=test",
+      download_url: "https://img.lihao66.top/focal/test.png?attname=focal-preview.png&e=123&token=test",
+      output_format: "png"
+    };
+    vi.mocked(uploadTemporaryImage).mockResolvedValue(image);
+    const response = await POST(createMultipartRequest());
+    const body = await response.json();
+    expect(response.status).toBe(200);
+    expect(body.image).toEqual(image);
+    expect(JSON.stringify(body)).not.toContain("base64-image");
+    expect(body.meta.daily_usage.generation_count).toBe(1);
+    expect(getDailyUsage(currentDb, "user-w08", getUsageDate())).toBe(1);
+    const logs = listGenerationLogs(currentDb, "user-w08");
+    expect(logs[0].status).toBe("success");
+    expect(JSON.stringify(logs)).not.toContain(image.url);
   });
 
   it("未登录请求返回 auth_required", async () => {

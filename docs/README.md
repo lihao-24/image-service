@@ -11,6 +11,8 @@
 
 ## 当前阶段材料
 
+- `plans/2026-11-17-qiniu-cdn-delivery.md`：可选七牛 CDN 图片交付实施记录；配置和验证步骤见 `../README.md`，存储规则见 `reference/data-and-storage.md`。
+
 - 当前已进入稳定运行阶段。部署入口以 `../README.md` 的”生产部署””线上排障”和
   `env/image-service.production.env.example` 为准；稳定 provider 行为以
   `reference/openai-compatible-images-api.md` 为准。

@@ -11,6 +11,7 @@ export type GenerationParamsSnapshot = {
 
 export type TemporaryImage = {
   src: string;
+  downloadSrc?: string;
   outputFormat: string;
   filename: string;
 };
